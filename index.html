@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Number Shot Pro</title>
+    <meta name="description" content="Number Shot Pro - Official real-time WinGo signal console and probability analysis system for 30s, 1m, 3m, and 5m intervals." />
+    <meta property="og:title" content="Number Shot Pro" />
+    <meta property="og:description" content="Number Shot Pro - Official real-time WinGo signal console and probability analysis system for 30s, 1m, 3m, and 5m intervals." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/icon-512.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Number Shot Pro" />
+    <meta name="twitter:description" content="Number Shot Pro - Official real-time WinGo signal console and probability analysis system for 30s, 1m, 3m, and 5m intervals." />
+    <meta name="twitter:image" content="/icon-512.png" />
+    <meta name="theme-color" content="#061b17" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Number Shot Pro" />
+    <meta name="application-name" content="Number Shot Pro" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-[#061b17] text-[#e9fff4] min-h-screen antialiased selection:bg-[#25c98e]/30 selection:text-[#25c98e]">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>
+

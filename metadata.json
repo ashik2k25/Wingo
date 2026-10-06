@@ -1,0 +1,6 @@
+{
+  "name": "WinGo Signals",
+  "description": "Real-time WinGo signal console and statistical probability overlay with Markov transition modeling for 30s, 1m, 3m, and 5m draw intervals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
