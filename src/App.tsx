@@ -21,12 +21,14 @@ import { LiveDrawTicker } from './components/LiveDrawTicker';
 import { SettingsModal } from './components/SettingsModal';
 import { FloatingOverlay } from './components/FloatingOverlay';
 import { DownloadModal } from './components/DownloadModal';
+import { AntiDetectionModal } from './components/AntiDetectionModal';
 import {
   Activity,
   Sliders,
   RefreshCw,
   Radio,
   Shield,
+  ShieldCheck,
   Volume2,
   VolumeX,
   Layers,
@@ -86,6 +88,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isOverlayOpen, setIsOverlayOpen] = useState<boolean>(false);
   const [isDownloadOpen, setIsDownloadOpen] = useState<boolean>(false);
+  const [isShieldOpen, setIsShieldOpen] = useState<boolean>(false);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [soundOn, setSoundOn] = useState<boolean>(true);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
@@ -333,79 +336,95 @@ export default function App() {
   const currentError = errors[activeTimeframe];
 
   return (
-    <div className="min-h-screen bg-[#061b17] text-[#e9fff4] font-sans flex flex-col items-center p-3 sm:p-5 selection:bg-[#25c98e]/30 selection:text-[#25c98e]">
-      <main className="w-full max-w-xl flex flex-col gap-3 sm:gap-4 pb-12">
+    <div className="min-h-screen aura-bg text-[#e2edf2] font-sans flex flex-col items-center p-3 sm:p-5 selection:bg-emerald-500/30 selection:text-emerald-300 relative">
+      {/* Ambient Floating Glow Lights */}
+      <div className="fixed top-0 left-1/4 w-96 h-96 bg-emerald-500/[0.07] rounded-full blur-[128px] pointer-events-none" />
+      <div className="fixed top-1/3 right-1/4 w-96 h-96 bg-purple-600/[0.06] rounded-full blur-[128px] pointer-events-none" />
+      <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-[500px] h-64 bg-teal-500/[0.05] rounded-full blur-[140px] pointer-events-none" />
+
+      <main className="w-full max-w-xl flex flex-col gap-3.5 sm:gap-4 pb-12 relative z-10">
         {/* Navigation & Status Header */}
-        <header className="flex items-center justify-between min-h-[48px] py-1">
-          <div className="flex items-center gap-2.5">
-            <img
-              src="/icon-192.png"
-              alt="Number Shot Pro"
-              className="w-9 h-9 rounded-2xl border border-[#21483c] object-cover shadow-inner"
-            />
+        <header className="flex items-center justify-between min-h-[52px] py-1">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <img
+                src="/icon-192.png"
+                alt="Number Shot Pro"
+                className="w-10 h-10 rounded-2xl border border-white/10 object-cover shadow-lg shadow-black/40"
+              />
+              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 border-2 border-[#070b10] animate-pulse" />
+            </div>
             <div>
-              <h1 className="text-base font-extrabold tracking-tight text-[#e9fff4] flex items-center gap-1.5">
-                <span>Number Shot Pro</span>
-                <span className="text-[10px] font-black uppercase px-1.5 py-0.2 rounded bg-[#25c98e] text-[#04221a]">
-                  APK
+              <h1 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-1.5">
+                <span>NUMBER SHOT</span>
+                <span className="bg-gradient-to-r from-emerald-400 via-teal-300 to-cyan-300 bg-clip-text text-transparent">
+                  PRO
+                </span>
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-white/10 text-emerald-300 border border-white/10">
+                  VIP
                 </span>
               </h1>
-              <p className="text-[11px] text-[#91aaa0]">Global Real-Time Authority</p>
+              <p className="text-[10px] text-slate-400 font-medium tracking-wide">
+                Real-Time Cloud Intelligence Suite
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Top Quick Actions Glass Capsule */}
+          <div className="glass-pill rounded-2xl p-1 flex items-center gap-1 shadow-md">
             {/* Global Server Sync Badge */}
-            {serverSynced ? (
-              <div
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#25c98e]/15 border border-[#25c98e]/40 text-[#25c98e] text-[10px] font-mono font-bold"
-                title="All devices worldwide receive identical signals from the cloud engine."
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-[#25c98e] animate-ping" />
-                <span className="hidden sm:inline">GLOBAL LIVE</span>
-                <span>SYNCED</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-[#f1c97a]/15 border border-[#f1c97a]/40 text-[#f1c97a] text-[10px] font-mono font-bold">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#f1c97a] animate-pulse" />
-                <span>CONNECTING...</span>
-              </div>
-            )}
-
-            {/* Admin Badge */}
-            {isAdmin && (
-              <span className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-xl bg-[#f59e0b]/20 border border-[#f59e0b]/50 text-[#f59e0b] text-[10px] font-mono font-black">
-                👑 ADMIN
-              </span>
-            )}
-
-            {/* Overlay toggle */}
-            <button
-              onClick={() => setIsOverlayOpen(!isOverlayOpen)}
-              className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
-                isOverlayOpen
-                  ? 'border-[#25c98e] bg-[#25c98e]/20 text-[#25c98e]'
-                  : 'border-[#21483c] bg-[#0c2822] text-[#91aaa0] hover:text-[#e9fff4]'
+            <div
+              className={`flex items-center gap-1.5 px-2 py-1 rounded-xl text-[9px] font-mono font-bold ${
+                serverSynced
+                  ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/20'
+                  : 'bg-amber-400/15 text-amber-300 border border-amber-400/20'
               }`}
-              title="Toggle Compact Overlay Mode"
+              title="Cloud authoritative real-time synchronization"
             >
-              <Layers className="w-4 h-4" />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  serverSynced ? 'bg-emerald-400 animate-ping' : 'bg-amber-400 animate-pulse'
+                }`}
+              />
+              <span className="hidden sm:inline">{serverSynced ? 'LIVE SYNC' : 'SYNCING'}</span>
+            </div>
+
+            {/* Stealth Anti-Trap Shield */}
+            <button
+              onClick={() => setIsShieldOpen(true)}
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-emerald-400 hover:text-emerald-200 hover:bg-emerald-500/15 transition-all cursor-pointer"
+              title="Stealth Anti-Detection Shield (সাইটের ট্র্যাকিং এড়ানোর গাইড)"
+            >
+              <ShieldCheck className="w-4 h-4" />
             </button>
 
             {/* Audio toggle */}
             <button
               onClick={handleToggleSound}
-              className="w-9 h-9 rounded-xl border border-[#21483c] bg-[#0c2822] flex items-center justify-center text-[#91aaa0] hover:text-[#e9fff4] transition-colors cursor-pointer"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
               title={soundOn ? 'Mute Audio' : 'Enable Audio'}
             >
-              {soundOn ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+              {soundOn ? <Volume2 className="w-4 h-4 text-emerald-400" /> : <VolumeX className="w-4 h-4" />}
+            </button>
+
+            {/* Compact Overlay HUD */}
+            <button
+              onClick={() => setIsOverlayOpen(!isOverlayOpen)}
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
+                isOverlayOpen
+                  ? 'bg-emerald-500/20 text-emerald-300'
+                  : 'text-slate-400 hover:text-white hover:bg-white/10'
+              }`}
+              title="Toggle Compact Floating HUD"
+            >
+              <Layers className="w-4 h-4" />
             </button>
 
             {/* Download / Install App */}
             <button
               onClick={() => setIsDownloadOpen(true)}
-              className="w-9 h-9 rounded-xl border border-[#25c98e]/40 bg-[#0c2822] flex items-center justify-center text-[#25c98e] hover:text-[#e9fff4] hover:bg-[#14362e] transition-colors cursor-pointer"
-              title="Download / Install App on Phone"
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-400 hover:text-white hover:bg-white/10 transition-all cursor-pointer"
+              title="Download / Install Web APK"
             >
               <Download className="w-4 h-4" />
             </button>
@@ -413,43 +432,30 @@ export default function App() {
             {/* Settings modal */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-colors cursor-pointer ${
+              className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all cursor-pointer ${
                 isAdmin
-                  ? 'border-[#f59e0b]/50 bg-[#f59e0b]/15 text-[#f59e0b]'
-                  : 'border-[#21483c] bg-[#0c2822] text-[#91aaa0] hover:text-[#e9fff4]'
+                  ? 'bg-amber-400/20 text-amber-300'
+                  : 'text-slate-400 hover:text-white hover:bg-white/10'
               }`}
-              title={isAdmin ? 'Admin Console' : 'View Settings (Admin Protected)'}
+              title={isAdmin ? 'Admin Console' : 'Settings'}
             >
               <Sliders className="w-4 h-4" />
             </button>
           </div>
         </header>
 
-        {/* Global Live Info Card */}
-        <section className="rounded-3xl border border-[#21483c] bg-[#0c2822] p-4 sm:p-5 flex items-start justify-between gap-3 shadow-md relative overflow-hidden">
-          <div className="flex-1 pr-2">
-            <span className="text-[9px] font-black tracking-widest uppercase text-[#25c98e] block mb-1">
-              CLOUD REAL-TIME SIGNAL AUTHORITY
+        {/* Draw Interval & Live Countdown Bar */}
+        <div className="flex items-center justify-between gap-2 px-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              INTERVAL
             </span>
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-[#e9fff4] leading-tight">
-              One panel. Four draw speeds.
-            </h2>
-            <p className="text-xs text-[#91aaa0] mt-1.5 leading-relaxed">
-              সবার ডিভাইসে একই সাথে হুবহু এক সিগন্যাল সার্ভার থেকে লাইভ সিঙ্ক হচ্ছে।
-            </p>
-          </div>
-
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[#21483c] bg-[#12342b] text-[9px] font-extrabold tracking-wider uppercase flex-shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#25c98e]" />
-            <span className="text-[#25c98e]">CLOUD LIVE</span>
-          </div>
-        </section>
-
-        {/* Draw Interval & Controls Header */}
-        <div className="flex items-center justify-between mt-1">
-          <div>
-            <h3 className="text-base font-bold text-[#e9fff4]">Draw interval</h3>
-            <p className="text-[11px] text-[#91aaa0] mt-0.5">Separate history for each mode</p>
+            <div className="flex items-center gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+              <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                {TIMEFRAME_LABELS[activeTimeframe]}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
@@ -461,21 +467,21 @@ export default function App() {
             <button
               onClick={() => handleManualSync(activeTimeframe)}
               disabled={isFetching[activeTimeframe]}
-              className="h-9 px-3 rounded-xl bg-[#14362e] hover:bg-[#173d33] border border-[#21483c] flex items-center gap-1.5 text-xs font-black tracking-wider uppercase text-[#e9fff4] transition-colors disabled:opacity-60 cursor-pointer"
-              title={`Sync ${TIMEFRAME_LABELS[activeTimeframe]} history`}
+              className="h-8 px-2.5 rounded-xl glass-pill hover:bg-white/10 flex items-center gap-1.5 text-[10px] font-extrabold tracking-wider uppercase text-white transition-all disabled:opacity-50 cursor-pointer"
+              title={`Sync ${TIMEFRAME_LABELS[activeTimeframe]}`}
             >
               <RefreshCw
-                className={`w-3.5 h-3.5 text-[#25c98e] ${
+                className={`w-3 h-3 text-emerald-400 ${
                   isFetching[activeTimeframe] ? 'animate-spin' : ''
                 }`}
               />
-              <span>SYNC</span>
+              <span className="hidden sm:inline">SYNC</span>
             </button>
           </div>
         </div>
 
-        {/* Timeframe Rail Tabs */}
-        <div className="flex p-1 rounded-2xl border border-[#21483c] bg-[#0c2822] gap-1 shadow-inner">
+        {/* Timeframe Rail Tabs (Classy Floating Pill Bar) */}
+        <div className="flex p-1 rounded-2xl glass-panel-subtle gap-1 shadow-inner">
           {TIMEFRAMES.map((tf) => {
             const isSelected = activeTimeframe === tf;
             const hasData = appState.histories[tf]?.length > 0;
@@ -488,17 +494,17 @@ export default function App() {
                   setActiveTimeframe(tf);
                   setInfoMessage('');
                 }}
-                className={`flex-1 min-h-[42px] rounded-xl flex items-center justify-center px-1 font-mono text-[11px] font-black tracking-wider uppercase transition-all duration-200 cursor-pointer relative ${
+                className={`flex-1 min-h-[40px] rounded-xl flex items-center justify-center px-1 font-mono text-[11px] font-black tracking-wider uppercase transition-all duration-200 cursor-pointer relative ${
                   isSelected
-                    ? 'bg-[#25c98e] text-[#04221a] shadow-md shadow-[#25c98e]/20 scale-[1.01]'
-                    : 'text-[#91aaa0] hover:text-[#e9fff4] hover:bg-[#14362e]/50'
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-[#051a14] shadow-md shadow-emerald-500/25 scale-[1.01]'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04]'
                 }`}
               >
                 <span>{tf === '30S' ? '30 SEC' : tf.replace('M', ' MIN')}</span>
                 {hasSignal && !isSelected && (
                   <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#25c98e] opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#25c98e]"></span>
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
                   </span>
                 )}
               </button>
@@ -519,15 +525,16 @@ export default function App() {
             updatedAt={appState.updatedAt[activeTimeframe]}
             onGenerate={handleGenerateSignal}
             onHide={() => setIsPanelVisible(false)}
+            onOpenShield={() => setIsShieldOpen(true)}
           />
         ) : (
           <div className="w-full flex justify-center py-2 animate-fadeIn">
             <button
               onClick={() => setIsPanelVisible(true)}
-              className="h-10 px-4 rounded-2xl bg-[#25c98e] hover:bg-[#28d59b] text-[#04221a] font-black text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg shadow-[#25c98e]/20 transition-all cursor-pointer"
+              className="h-10 px-5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-[#051a14] font-black text-xs tracking-wider uppercase flex items-center gap-2 shadow-lg shadow-emerald-500/25 transition-all cursor-pointer"
             >
               <Radio className="w-4 h-4 animate-pulse" />
-              <span>OPEN SIGNAL PANEL</span>
+              <span>OPEN VIP SIGNAL PANEL</span>
             </button>
           </div>
         )}
@@ -593,6 +600,12 @@ export default function App() {
         isOpen={isDownloadOpen}
         onClose={() => setIsDownloadOpen(false)}
         deferredPrompt={deferredPrompt}
+      />
+
+      {/* Stealth Anti-Detection Shield Modal */}
+      <AntiDetectionModal
+        isOpen={isShieldOpen}
+        onClose={() => setIsShieldOpen(false)}
       />
     </div>
   );

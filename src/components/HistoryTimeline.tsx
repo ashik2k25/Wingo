@@ -73,13 +73,13 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
   return (
     <div className="w-full">
       {/* Section Header */}
-      <div className="flex items-center justify-between mb-3 mt-4">
+      <div className="flex items-center justify-between mb-3 mt-3 px-0.5">
         <div>
-          <h3 className="text-base font-bold text-[#e9fff4]">Recent history</h3>
-          <p className="text-[11px] text-[#91aaa0] mt-0.5">
+          <h3 className="text-sm font-bold text-white tracking-tight">Recent Draw History</h3>
+          <p className="text-[11px] text-slate-400 mt-0.5">
             {history.length
-              ? `${history.length} valid results · showing latest 16`
-              : 'No results loaded for this interval'}
+              ? `${history.length} verified results · showing latest 16`
+              : 'No results recorded for this interval'}
           </p>
         </div>
 
@@ -87,14 +87,14 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
           {isAdmin && history.length > 0 && (
             <button
               onClick={() => setShowQuickAdd(!showQuickAdd)}
-              className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-[#21483c] bg-[#14362e] text-[#25c98e] hover:bg-[#173d33] transition-colors flex items-center gap-1 cursor-pointer"
+              className="text-xs font-semibold px-2.5 py-1 rounded-xl border border-white/10 bg-white/5 text-emerald-400 hover:bg-white/10 transition-colors flex items-center gap-1 cursor-pointer"
               title="Quickly record the outcome of the newest draw"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Log Draw</span>
             </button>
           )}
-          <span className="text-[11px] font-extrabold tracking-wider text-[#25c98e] px-2 py-0.5 rounded bg-[#14362e] border border-[#21483c] font-mono">
+          <span className="text-[11px] font-extrabold tracking-wider text-emerald-400 px-2.5 py-0.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 font-mono">
             {timeframe}
           </span>
         </div>
@@ -102,12 +102,12 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
 
       {/* Quick Add Bar */}
       {showQuickAdd && (
-        <div className="mb-3 p-3 rounded-xl bg-[#0c2822] border border-[#25c98e]/40 shadow-lg animate-fadeIn">
-          <div className="text-[11px] font-bold text-[#91aaa0] mb-2 flex justify-between items-center">
+        <div className="mb-3 p-3 rounded-2xl glass-panel border border-emerald-500/30 shadow-lg animate-fadeIn">
+          <div className="text-[11px] font-bold text-slate-400 mb-2 flex justify-between items-center">
             <span>Tap the number drawn in the latest round:</span>
             <button
               onClick={() => setShowQuickAdd(false)}
-              className="text-xs text-[#91aaa0] hover:text-white cursor-pointer"
+              className="text-xs text-slate-400 hover:text-white cursor-pointer"
             >
               Close
             </button>
@@ -129,16 +129,16 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
       )}
 
       {/* History Card List */}
-      <div className="rounded-2xl border border-[#21483c] bg-[#0c2822] overflow-hidden divide-y divide-[#21483c]/60">
+      <div className="rounded-3xl glass-panel-subtle overflow-hidden divide-y divide-white/[0.04]">
         {recentHistory.length === 0 ? (
           <div className="min-h-[140px] flex flex-col items-center justify-center gap-2.5 p-6 text-center">
-            <Database className="w-6 h-6 text-[#91aaa0]" />
-            <p className="text-xs text-[#91aaa0] max-w-xs">
+            <Database className="w-6 h-6 text-slate-500" />
+            <p className="text-xs text-slate-400 max-w-xs">
               Waiting for live server draw or network sync...
             </p>
             <button
               onClick={onOpenSettings}
-              className="mt-1 text-xs font-bold px-3 py-1.5 rounded-lg bg-[#14362e] text-[#25c98e] border border-[#21483c] hover:bg-[#173d33] transition-colors cursor-pointer"
+              className="mt-1 text-xs font-bold px-3 py-1.5 rounded-xl glass-pill text-emerald-400 hover:bg-white/10 transition-colors cursor-pointer"
             >
               Open History Settings
             </button>
@@ -152,8 +152,8 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
             return (
               <div
                 key={`${timeframe}-${item.period}`}
-                className={`min-h-[58px] px-3.5 py-2.5 flex items-center gap-3 transition-colors hover:bg-[#14362e]/40 ${
-                  isLatest ? 'bg-[#14362e]/20' : ''
+                className={`min-h-[56px] px-4 py-2.5 flex items-center gap-3 transition-colors hover:bg-white/[0.03] ${
+                  isLatest ? 'bg-emerald-500/[0.05]' : ''
                 }`}
               >
                 {/* Number Ball */}
@@ -162,48 +162,31 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                 {/* Period & Details */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-mono font-bold text-[#e9fff4] truncate">
+                    <span className="text-xs font-mono font-bold text-white truncate">
                       {item.period}
                     </span>
                     {isLatest && (
-                      <span className="text-[9px] uppercase font-extrabold px-1.5 py-0.2 rounded bg-[#25c98e]/20 text-[#25c98e] border border-[#25c98e]/30">
-                        Latest
+                      <span className="text-[9px] uppercase font-extrabold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                        LATEST
                       </span>
                     )}
                   </div>
-                  <div className="text-[11px] text-[#91aaa0] mt-0.5 tracking-tight flex items-center gap-1.5">
+                  <div className="text-[11px] text-slate-400 mt-0.5 tracking-tight flex items-center gap-2">
                     <span
                       className="font-bold"
-                      style={{ color: size === 'BIG' ? '#f59e0b' : '#3b82f6' }}
+                      style={{ color: size === 'BIG' ? '#f59e0b' : '#38bdf8' }}
                     >
                       {size}
                     </span>
-                    <span>·</span>
+                    <span className="text-slate-600">•</span>
                     <span
+                      className="font-medium"
                       style={{ color: getColorTextColor(color) }}
-                      className="font-semibold uppercase"
                     >
                       {getDisplayColorName(color)}
                     </span>
                   </div>
                 </div>
-
-                {/* Accent Color Line */}
-                <div
-                  className="w-1 h-6 rounded-full flex-shrink-0 opacity-85"
-                  style={{
-                    background:
-                      color === 'RED_VIOLET'
-                        ? 'linear-gradient(to bottom, #ef4444, #a855f7)'
-                        : color === 'GREEN_VIOLET'
-                        ? 'linear-gradient(to bottom, #22c55e, #a855f7)'
-                        : color === 'GREEN'
-                        ? '#22c55e'
-                        : color === 'RED'
-                        ? '#ef4444'
-                        : '#a855f7',
-                  }}
-                />
               </div>
             );
           })
@@ -211,12 +194,12 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
       </div>
 
       {history.length > 0 && (
-        <div className="flex justify-between items-center mt-2 px-1 text-[11px] text-[#91aaa0]">
+        <div className="flex justify-between items-center mt-2 px-1 text-[11px] text-slate-500">
           <span>Official server-verified draw order (newest first)</span>
           {isAdmin && (
             <button
               onClick={onClearHistory}
-              className="hover:text-[#ef6269] transition-colors flex items-center gap-1 cursor-pointer"
+              className="hover:text-rose-400 transition-colors flex items-center gap-1 cursor-pointer"
             >
               <Trash2 className="w-3 h-3" />
               <span>Reset {timeframe}</span>

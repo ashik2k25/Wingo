@@ -25,6 +25,14 @@ export interface Signal {
   numberDistribution: number[];
   targetPeriod: string;
   backtest: BacktestResult | null;
+  primaryBet?: 'SIZE' | 'COLOR' | 'NUMBER';
+  sizeSafety?: 'SAFE' | 'MEDIUM' | 'RISKY';
+  colorSafety?: 'SAFE' | 'MEDIUM';
+  patternType?: 'STREAK' | 'CHOP' | 'DOUBLE' | 'NORMAL';
+  advisoryNote?: string;
+  hedgeTip?: string;
+  lossStreakPrevented?: boolean;
+  consecutiveLosses?: number;
 }
 
 export type SourceMode = 'none' | 'api' | 'manual' | 'simulated';

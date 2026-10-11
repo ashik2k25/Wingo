@@ -10,6 +10,14 @@ import {
   buildSignal,
   parseHistoryPayload,
 } from './src/utils/engine';
+import {
+  telegramConfig,
+  sendTelegramSignal,
+  sendTelegramMessage,
+  pollTelegramUpdates,
+  fetchBotInfo,
+  registerSubscriber,
+} from './src/utils/telegram';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -177,6 +185,10 @@ async function syncTimeframeOnServer(tf: Timeframe): Promise<boolean> {
       const newSignal = buildSignal(merged);
       if (newSignal) {
         masterState.signals[tf] = newSignal;
+        // Broadcast in real-time to Telegram VIP Bot
+        sendTelegramSignal(tf, newSignal).catch((err) => {
+          console.warn('[Telegram dispatch]', err?.message);
+        });
       }
     }
 
@@ -201,10 +213,16 @@ async function syncTimeframeOnServer(tf: Timeframe): Promise<boolean> {
 // Background Master Scheduler
 // Automatically polls all 4 intervals with server precision
 function startBackgroundScheduler() {
+  // Check and initialize Telegram bot
+  fetchBotInfo().catch(() => {});
+
   // Initial sync for all 4 intervals immediately on server boot
   for (const tf of TIMEFRAMES) {
     syncTimeframeOnServer(tf);
   }
+
+  // Poll Telegram for user /start or channel additions every 5 seconds
+  setInterval(pollTelegramUpdates, 5000);
 
   const lastTriggeredRound: Record<Timeframe, number> = {
     '30S': Math.floor(Date.now() / 1000 / 30),
@@ -360,6 +378,81 @@ app.post('/api/admin/settings', async (req: Request, res: Response) => {
     message: 'Settings updated successfully on server',
     endpoints: masterState.endpoints,
   });
+});
+
+// 5. Telegram VIP Bot Configuration Endpoints
+app.get('/api/telegram/config', (_req: Request, res: Response) => {
+  res.json({
+    botToken: telegramConfig.botToken,
+    chatId: telegramConfig.chatId,
+    enabled: telegramConfig.enabled,
+    timeframes: telegramConfig.timeframes,
+    autoDetectChatId: telegramConfig.autoDetectChatId,
+    lastSentPeriod: telegramConfig.lastSentPeriod,
+    lastSentTime: telegramConfig.lastSentTime,
+    lastError: telegramConfig.lastError,
+    botInfo: telegramConfig.botInfo,
+  });
+});
+
+app.post('/api/telegram/config', (req: Request, res: Response) => {
+  const { botToken, chatId, enabled, timeframes, autoDetectChatId } = req.body || {};
+  if (typeof botToken === 'string' && botToken.trim()) {
+    telegramConfig.botToken = botToken.trim();
+    fetchBotInfo().catch(() => {});
+  }
+  if (typeof chatId === 'string' && chatId.trim()) {
+    telegramConfig.chatId = chatId.trim();
+    registerSubscriber(chatId.trim(), 'Configured Target', 'channel');
+  }
+  if (typeof enabled === 'boolean') {
+    telegramConfig.enabled = enabled;
+  }
+  if (typeof autoDetectChatId === 'boolean') {
+    telegramConfig.autoDetectChatId = autoDetectChatId;
+  }
+  if (timeframes && typeof timeframes === 'object') {
+    telegramConfig.timeframes = {
+      ...telegramConfig.timeframes,
+      ...timeframes,
+    };
+  }
+  res.json({ success: true, config: telegramConfig });
+});
+
+app.post('/api/telegram/test', async (req: Request, res: Response) => {
+  const { chatId } = req.body || {};
+  const target = (chatId && String(chatId).trim()) || telegramConfig.chatId;
+  if (!target) {
+    res.status(400).json({
+      success: false,
+      error: 'No Chat ID found. Please open Telegram, search @johnwickvip_bot, click START, or add it to your channel.',
+    });
+    return;
+  }
+
+  const testMessage = [
+    `👑 <b>NUMBER SHOT PRO — VIP BOT ACTIVE</b> 👑`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `⏱ <b>Status:</b> <code>CONNECTED & SYNCED</code>`,
+    `🎲 <b>Sample Draw Round:</b> <code>${Date.now()}</code>`,
+    ``,
+    `🔮 <b>LIVE PREDICTION TEST:</b>`,
+    `👉 <b>Size:</b> 🟢 BIG (5-9)`,
+    `👉 <b>Color:</b> 🟢 GREEN`,
+    `👉 <b>Best Number:</b> <code>[ 7 ]</code>`,
+    ``,
+    `📊 <b>VIP Confidence:</b> <code>91.5%</code>`,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `⚡ <i>Live VIP Signals will be broadcast here automatically.</i>`,
+  ].join('\n');
+
+  const ok = await sendTelegramMessage(testMessage, target);
+  if (ok) {
+    res.json({ success: true, message: 'VIP Signal test sent to Telegram successfully!' });
+  } else {
+    res.status(500).json({ success: false, error: telegramConfig.lastError || 'Failed to send Telegram message' });
+  }
 });
 
 // 5. Raw history proxy endpoint (retained for backward compatibility)

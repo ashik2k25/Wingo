@@ -101,17 +101,16 @@ function calculateFrequencies(numbers: number[], smoothing: number): number[] {
 }
 
 function calculateModelDistribution(history: DrawResult[]): number[] {
-  // Restore exact Oct 4, 1:14AM prediction model:
-  // Strictly evaluates the active 10 draws of the board as returned by the official lottery feed
+  // Evaluates the active 10 draws of the board (Oct 4, 1:14AM foundation)
   const activeHistory = history.slice(-10);
   const numbers = activeHistory.map((h) => h.number);
   if (numbers.length === 0) return Array.from({ length: 10 }, () => 0.1);
 
-  // Baseline frequencies across the active board & immediate short-term trend
-  const baseline = calculateFrequencies(numbers, 2);
+  // 1. Baseline Dirichlet frequencies across the active 10 draws & short-term 5-draw trend
+  const baseline = calculateFrequencies(numbers, 2.0);
   const shortTerm = calculateFrequencies(numbers.slice(-5), 1.5);
 
-  // Exponential decay momentum across the recent draws
+  // 2. Exponential decay momentum across recent draws
   const momentum = Array.from({ length: 10 }, () => 0.1);
   numbers.forEach((n, idx) => {
     const age = numbers.length - idx - 1;
@@ -122,7 +121,7 @@ function calculateModelDistribution(history: DrawResult[]): number[] {
   });
   const normMomentum = normalizeDistribution(momentum);
 
-  // First-order Markov chain: what follows the last drawn number in the active board
+  // 3. First-order Markov chain transitions
   const lastNum = numbers[numbers.length - 1];
   const markov1 = Array.from({ length: 10 }, () => 0);
   let transCount1 = 0;
@@ -136,7 +135,7 @@ function calculateModelDistribution(history: DrawResult[]): number[] {
     }
   }
 
-  // Second-order Markov chain: what follows [secondLastNum, lastNum]
+  // 4. Second-order Markov chain transitions
   const markov2 = Array.from({ length: 10 }, () => 0);
   let transCount2 = 0;
   if (numbers.length >= 3) {
@@ -152,27 +151,77 @@ function calculateModelDistribution(history: DrawResult[]): number[] {
     }
   }
 
-  // Size trend & streak balance (mean-reversion after long streaks of BIG / SMALL)
-  let consecutiveSameSize = 1;
+  // 5. ANTI-BLIND SATURATION FILTER (Solves the issue where 6-7 same size makes model blind)
+  const bigCount = numbers.filter((n) => n >= 5).length;
+  const smallCount = numbers.length - bigCount;
   const lastSize = getSize(lastNum);
-  for (let i = numbers.length - 2; i >= 0; i--) {
-    if (getSize(numbers[i]) === lastSize) {
-      consecutiveSameSize++;
-    } else {
-      break;
-    }
+
+  // Active unbroken streak length
+  let streak = 0;
+  for (let i = numbers.length - 1; i >= 0; i--) {
+    if (getSize(numbers[i]) === lastSize) streak++;
+    else break;
   }
 
-  // If streak >= 3, slightly adjust odds toward opposite size to account for reversion
-  const sizeAdjustment = Array.from({ length: 10 }, (_, n) => {
-    if (consecutiveSameSize >= 3) {
-      const isOpposite = getSize(n) !== lastSize;
-      return isOpposite ? 1 + Math.min(0.25, (consecutiveSameSize - 2) * 0.08) : 1;
+  // Check 1-1 Ping-Pong Alternation
+  const isChop =
+    numbers.length >= 4 &&
+    getSize(numbers[numbers.length - 1]) !== getSize(numbers[numbers.length - 2]) &&
+    getSize(numbers[numbers.length - 2]) === getSize(numbers[numbers.length - 4]) &&
+    getSize(numbers[numbers.length - 1]) === getSize(numbers[numbers.length - 3]);
+
+  // Structural Pivot on 0 or 5
+  const isViolet0 = lastNum === 0;
+  const isViolet5 = lastNum === 5;
+
+  // Calibrate per-digit multipliers
+  const dynamicMultipliers = Array.from({ length: 10 }, (_, n) => {
+    let mult = 1.0;
+    const isBig = n >= 5;
+
+    // A. Anti-Blind Equilibrium:
+    // If one size dominates (>= 6 of 10 draws), dampen the saturated side
+    // UNLESS there is a fresh active streak of 2-4 draws
+    if (bigCount >= 6 && streak <= 1) {
+      const damp = Math.min(0.35, (bigCount - 5) * 0.08);
+      mult *= isBig ? 1.0 - damp : 1.0 + damp;
+    } else if (smallCount >= 6 && streak <= 1) {
+      const damp = Math.min(0.35, (smallCount - 5) * 0.08);
+      mult *= !isBig ? 1.0 - damp : 1.0 + damp;
     }
-    return 1;
+
+    // B. Streak Dynamics:
+    if (streak >= 2 && streak <= 4) {
+      // Dragon trend active: support continuation
+      const isStreakSize = (isBig && lastSize === 'BIG') || (!isBig && lastSize === 'SMALL');
+      mult *= isStreakSize ? 1.15 : 0.88;
+    } else if (streak >= 6) {
+      // Overextended streak: mean-reversion pressure
+      const isStreakSize = (isBig && lastSize === 'BIG') || (!isBig && lastSize === 'SMALL');
+      mult *= isStreakSize ? 0.82 : 1.22;
+    }
+
+    // C. 1-1 Ping-Pong Alternation:
+    if (isChop) {
+      const isOpposite = (isBig && lastSize === 'SMALL') || (!isBig && lastSize === 'BIG');
+      mult *= isOpposite ? 1.25 : 0.78;
+    }
+
+    // D. Violet 0/5 Pivots:
+    if (isViolet0 && streak === 1) {
+      // 0 drawn breaks Big into Small
+      mult *= !isBig ? 1.18 : 0.85;
+      if (n === 0 || [2, 4, 6, 8].includes(n)) mult *= 1.10; // Boost Red
+    } else if (isViolet5 && streak === 1) {
+      // 5 drawn breaks Small into Big
+      mult *= isBig ? 1.18 : 0.85;
+      if (n === 5 || [1, 3, 7, 9].includes(n)) mult *= 1.10; // Boost Green
+    }
+
+    return mult;
   });
 
-  // Blend distributions
+  // Blend distributions with dynamic pattern multipliers
   const blended = baseline.map((b, i) => {
     let p = 0.35 * b + 0.35 * shortTerm[i] + 0.30 * normMomentum[i];
     if (transCount1 >= 1) {
@@ -183,7 +232,7 @@ function calculateModelDistribution(history: DrawResult[]): number[] {
       const m2Prob = markov2[i] / transCount2;
       p = p * 0.8 + m2Prob * 0.2;
     }
-    p *= sizeAdjustment[i];
+    p *= dynamicMultipliers[i];
     return p;
   });
 
@@ -247,26 +296,167 @@ function runBacktest(history: DrawResult[]): BacktestResult | null {
   return { samples, numberHits, sizeHits, colorHits };
 }
 
+export interface PatternAnalysis {
+  recommendedSize: BallSize;
+  sizeConfidence: number;
+  sizeSafety: 'SAFE' | 'MEDIUM' | 'RISKY';
+  patternType: 'STREAK' | 'CHOP' | 'DOUBLE' | 'NORMAL';
+  primaryBet: 'SIZE' | 'COLOR' | 'NUMBER';
+  colorSafety: 'SAFE' | 'MEDIUM';
+  advisoryNote: string;
+  hedgeTip: string;
+  activeStreak: number;
+  lossStreakPrevented?: boolean;
+  consecutiveLosses?: number;
+}
+
+export function analyzeSizeAndPattern(history: DrawResult[]): PatternAnalysis {
+  const activeHistory = history.slice(-10);
+  const len = activeHistory.length;
+  if (len === 0) {
+    return {
+      recommendedSize: 'BIG',
+      sizeConfidence: 0.5,
+      sizeSafety: 'SAFE',
+      patternType: 'NORMAL',
+      primaryBet: 'SIZE',
+      colorSafety: 'SAFE',
+      advisoryNote: 'Initial board state.',
+      hedgeTip: 'Standard play.',
+      activeStreak: 1,
+    };
+  }
+
+  // 1. Unified statistical probability distribution
+  const dist = calculateModelDistribution(activeHistory);
+  const bigShare = calculateCategoryShare(dist, 'BIG');
+  const smallShare = calculateCategoryShare(dist, 'SMALL');
+  const recommendedSize: BallSize = bigShare >= smallShare ? 'BIG' : 'SMALL';
+  const sizeConfidence = Math.max(bigShare, smallShare);
+
+  const numbers = activeHistory.map((h) => h.number);
+  const lastNum = numbers[len - 1];
+  const lastSize = getSize(lastNum);
+
+  // Active unbroken streak
+  let activeStreak = 0;
+  for (let i = len - 1; i >= 0; i--) {
+    if (getSize(numbers[i]) === lastSize) activeStreak++;
+    else break;
+  }
+
+  // 1-1 Ping-Pong Alternation
+  const isChop =
+    len >= 4 &&
+    getSize(numbers[len - 1]) !== getSize(numbers[len - 2]) &&
+    getSize(numbers[len - 2]) === getSize(numbers[len - 4]) &&
+    getSize(numbers[len - 1]) === getSize(numbers[len - 3]);
+
+  // Saturation check (6+ out of 10)
+  const bigCount = numbers.filter((n) => n >= 5).length;
+  const smallCount = len - bigCount;
+  const isSaturated = bigCount >= 7 || smallCount >= 7;
+
+  // Violet 0 or 5 Structural Pivot
+  const isViolet0 = lastNum === 0;
+  const isViolet5 = lastNum === 5;
+
+  let patternType: 'STREAK' | 'CHOP' | 'DOUBLE' | 'NORMAL' = 'NORMAL';
+  let sizeSafety: 'SAFE' | 'MEDIUM' | 'RISKY' = 'SAFE';
+  let advisoryNote = '';
+  let hedgeTip = '';
+
+  if (isChop) {
+    patternType = 'CHOP';
+    sizeSafety = 'SAFE';
+    advisoryNote = '1-1 Alternation (Ping-Pong) rhythm confirmed. Cadence followed.';
+    hedgeTip = 'Follow alternating rhythm safely.';
+  } else if (activeStreak >= 6) {
+    patternType = 'STREAK';
+    sizeSafety = 'RISKY';
+    advisoryNote = `Mature ${activeStreak}x ${lastSize} dragon reached exhaustion ceiling.`;
+    hedgeTip = 'Prioritize COLOR bet for bankroll protection.';
+  } else if (activeStreak >= 2) {
+    patternType = 'STREAK';
+    sizeSafety = activeStreak >= 4 ? 'MEDIUM' : 'SAFE';
+    advisoryNote = `Active ${activeStreak}x ${lastSize} momentum trend. Riding the wave safely.`;
+    hedgeTip = activeStreak >= 4 ? 'Watch for Violet 0/5 pivot.' : 'Follow trend momentum.';
+  } else if (isViolet0 && len >= 2 && getSize(numbers[len - 2]) === 'BIG') {
+    patternType = 'CHOP';
+    sizeSafety = 'SAFE';
+    advisoryNote = 'Violet 0 structural pivot: Big trend broken, Small reset initiated.';
+    hedgeTip = 'Color RED hedge supported.';
+  } else if (isViolet5 && len >= 2 && getSize(numbers[len - 2]) === 'SMALL') {
+    patternType = 'CHOP';
+    sizeSafety = 'SAFE';
+    advisoryNote = 'Violet 5 structural pivot: Small trend broken, Big reset initiated.';
+    hedgeTip = 'Color GREEN hedge supported.';
+  } else if (isSaturated) {
+    patternType = 'NORMAL';
+    sizeSafety = 'MEDIUM';
+    advisoryNote = `Anti-Blind filter active: ${Math.max(bigCount, smallCount)} of 10 draws were ${bigCount >= smallCount ? 'BIG' : 'SMALL'}. Damping applied.`;
+    hedgeTip = 'Balanced play with Color hedge.';
+  } else {
+    patternType = 'NORMAL';
+    sizeSafety = sizeConfidence >= 0.58 ? 'SAFE' : 'MEDIUM';
+    advisoryNote = 'Markov probability and frequency momentum aligned.';
+    hedgeTip = 'Standard balanced play.';
+  }
+
+  // Safe primary bet recommendation:
+  // If size is marked RISKY, direct user to safe COLOR bet!
+  const primaryBet: 'SIZE' | 'COLOR' | 'NUMBER' = sizeSafety === 'RISKY' ? 'COLOR' : 'SIZE';
+  const colorSafety: 'SAFE' | 'MEDIUM' = sizeSafety === 'RISKY' ? 'SAFE' : 'MEDIUM';
+
+  return {
+    recommendedSize,
+    sizeConfidence,
+    sizeSafety,
+    patternType,
+    primaryBet,
+    colorSafety,
+    advisoryNote,
+    hedgeTip,
+    activeStreak,
+  };
+}
+
 export function buildSignal(history: DrawResult[]): Signal | null {
   if (!history || history.length < 5) return null;
-  const dist = calculateModelDistribution(history);
-  const bestNumber = dist.indexOf(Math.max(...dist));
-  const bestSize = selectMaxCategory<BallSize>(['SMALL', 'BIG'], (s) =>
-    calculateCategoryShare(dist, s)
-  );
-  // Color strictly based on number per WinGo rules and screenshot:
+  const activeHistory = history.slice(-10);
+
+  // 1. Calculate distribution and smart pattern analysis
+  const dist = calculateModelDistribution(activeHistory);
+  const patternAnalysis = analyzeSizeAndPattern(activeHistory);
+  const bestSize = patternAnalysis.recommendedSize;
+
+  // 2. Harmonize number distribution with the recommended size
+  const adjustedDist = dist.map((prob, num) => {
+    const isMatchingSize = getSize(num) === bestSize;
+    return isMatchingSize ? prob * 1.45 : prob * 0.55;
+  });
+  const normalizedDist = normalizeDistribution(adjustedDist);
+
+  // 3. Best number & color
+  const bestNumber = normalizedDist.indexOf(Math.max(...normalizedDist));
   const bestColor = getColor(bestNumber);
 
   return {
     number: bestNumber,
     size: bestSize,
     color: bestColor,
-    numberShare: dist[bestNumber],
-    sizeShare: calculateCategoryShare(dist, bestSize),
-    colorShare: calculateCategoryShare(dist, bestColor),
-    numberDistribution: dist,
+    numberShare: normalizedDist[bestNumber],
+    sizeShare: patternAnalysis.sizeConfidence,
+    colorShare: calculateCategoryShare(normalizedDist, bestColor),
+    numberDistribution: normalizedDist,
     targetPeriod: nextPeriod(history),
     backtest: runBacktest(history),
+    primaryBet: patternAnalysis.primaryBet,
+    sizeSafety: patternAnalysis.sizeSafety,
+    colorSafety: patternAnalysis.colorSafety,
+    patternType: patternAnalysis.patternType,
+    advisoryNote: patternAnalysis.advisoryNote,
+    hedgeTip: patternAnalysis.hedgeTip,
   };
 }
 

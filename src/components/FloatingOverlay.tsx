@@ -119,6 +119,20 @@ export const FloatingOverlay: React.FC<FloatingOverlayProps> = ({
             <div className="py-2 text-[11px] text-[#91aaa0]">No active signal</div>
           )}
 
+          {/* Compact Primary Bet Badge */}
+          {signal && (
+            <div className={`w-full py-1 px-2 rounded-lg text-[9px] font-black uppercase tracking-wider flex items-center justify-between border ${
+              signal.primaryBet === 'COLOR'
+                ? 'bg-[#10b981]/15 border-[#10b981]/40 text-[#10b981]'
+                : 'bg-[#25c98e]/15 border-[#25c98e]/40 text-[#25c98e]'
+            }`}>
+              <span>🎯 BET: {signal.primaryBet === 'COLOR' ? getDisplayColorName(signal.color) : signal.size}</span>
+              {signal.sizeSafety === 'RISKY' && (
+                <span className="text-[#ef6269] font-bold">⚠️ SIZE RISK</span>
+              )}
+            </div>
+          )}
+
           <button
             onClick={() => {
               playGenerateChime();
