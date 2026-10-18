@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Timeframe, AppState, Signal, DrawResult } from './types';
+import { Timeframe, AppState, Signal, DrawResult, SignalLedgerEntry } from './types';
 import {
   TIMEFRAMES,
   TIMEFRAME_LABELS,
@@ -95,6 +95,13 @@ export default function App() {
 
   // Server-Authoritative Global Synchronization
   const [serverSynced, setServerSynced] = useState<boolean>(false);
+  const [serverTimeOffset, setServerTimeOffset] = useState<number>(0);
+  const [ledgers, setLedgers] = useState<Record<Timeframe, SignalLedgerEntry[]>>({
+    '30S': [],
+    '1M': [],
+    '3M': [],
+    '5M': [],
+  });
   const [isAdmin, setIsAdmin] = useState<boolean>(() => {
     return typeof window !== 'undefined' && sessionStorage.getItem('wingo_admin_auth') === 'true';
   });
@@ -126,6 +133,12 @@ export default function App() {
           updatedAt: data.updatedAt || prev.updatedAt,
         }));
         setSignals(data.signals);
+        if (data.ledgers) {
+          setLedgers(data.ledgers);
+        }
+        if (data.serverTime) {
+          setServerTimeOffset(data.serverTime - Date.now());
+        }
         setServerSynced(true);
       }
     } catch {
@@ -155,6 +168,9 @@ export default function App() {
               updatedAt: data.updatedAt,
             }));
             setSignals(data.signals);
+            if (data.serverTime) {
+              setServerTimeOffset(data.serverTime - Date.now());
+            }
             setServerSynced(true);
             setIsLoaded(true);
           } catch {}
@@ -170,6 +186,9 @@ export default function App() {
               updatedAt: { ...prev.updatedAt, [data.tf]: data.updatedAt },
             }));
             setSignals((prev) => ({ ...prev, [data.tf]: data.signal }));
+            if (data.serverTime) {
+              setServerTimeOffset(data.serverTime - Date.now());
+            }
             setServerSynced(true);
           } catch {}
         });
@@ -207,6 +226,31 @@ export default function App() {
     };
   }, [syncWithServer]);
 
+  // Resilient multi-device synchronization (phone unlock, tab switch, network reconnect)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        syncWithServer();
+      }
+    };
+    const handleFocus = () => {
+      syncWithServer();
+    };
+    const handleOnline = () => {
+      syncWithServer();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('online', handleOnline);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [syncWithServer]);
+
   // Sound toggle handler
   const handleToggleSound = () => {
     const next = !soundOn;
@@ -214,13 +258,20 @@ export default function App() {
     setSoundEnabled(next);
   };
 
-  // Manual trigger for refresh button
+  // Manual trigger for refresh button (authoritative server sync)
   const handleManualSync = async (tf: Timeframe) => {
     setIsFetching((prev) => ({ ...prev, [tf]: true }));
+    try {
+      await fetch('/api/signal/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tf }),
+      });
+    } catch {}
     await syncWithServer();
     setTimeout(() => {
       setIsFetching((prev) => ({ ...prev, [tf]: false }));
-    }, 500);
+    }, 400);
   };
 
   // Admin Login Handler
@@ -318,16 +369,39 @@ export default function App() {
     handleResetServerTimeframe(activeTimeframe);
   };
 
-  // Generate signal immediately for active timeframe (restores Oct 4 1:14AM APK responsiveness)
-  const handleGenerateSignal = () => {
-    const history = appState.histories[activeTimeframe] || [];
-    if (history.length >= 5) {
-      const freshSignal = buildSignal(history);
-      if (freshSignal) {
-        setSignals((prev) => ({ ...prev, [activeTimeframe]: freshSignal }));
+  // Authoritative signal calculation requested from the server
+  // Guarantees all devices (PC, Mobile, Tablet, Telegram) see the exact same signal
+  const handleGenerateSignal = async () => {
+    setIsFetching((prev) => ({ ...prev, [activeTimeframe]: true }));
+    try {
+      const res = await fetch('/api/signal/calculate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tf: activeTimeframe }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.signal) {
+          setSignals((prev) => ({ ...prev, [activeTimeframe]: data.signal }));
+        }
+        if (data.history) {
+          setAppState((prev) => ({
+            ...prev,
+            histories: { ...prev.histories, [activeTimeframe]: data.history },
+            updatedAt: { ...prev.updatedAt, [activeTimeframe]: data.updatedAt },
+          }));
+        }
+        if (data.serverTime) {
+          setServerTimeOffset(data.serverTime - Date.now());
+        }
+        setServerSynced(true);
+      } else {
+        await syncWithServer();
       }
-    } else {
-      syncWithServer();
+    } catch {
+      await syncWithServer();
+    } finally {
+      setIsFetching((prev) => ({ ...prev, [activeTimeframe]: false }));
     }
   };
 
@@ -386,7 +460,7 @@ export default function App() {
                   serverSynced ? 'bg-emerald-400 animate-ping' : 'bg-amber-400 animate-pulse'
                 }`}
               />
-              <span className="hidden sm:inline">{serverSynced ? 'LIVE SYNC' : 'SYNCING'}</span>
+              <span className="hidden sm:inline">{serverSynced ? 'ALL DEVICES SYNCED' : 'SYNCING'}</span>
             </div>
 
             {/* Stealth Anti-Trap Shield */}
@@ -461,6 +535,7 @@ export default function App() {
           <div className="flex items-center gap-2">
             <LiveDrawTicker
               timeframe={activeTimeframe}
+              serverTimeOffset={serverTimeOffset}
               onRoundExpire={() => syncWithServer()}
             />
 
@@ -493,6 +568,9 @@ export default function App() {
                 onClick={() => {
                   setActiveTimeframe(tf);
                   setInfoMessage('');
+                  if (!signals[tf]) {
+                    syncWithServer();
+                  }
                 }}
                 className={`flex-1 min-h-[40px] rounded-xl flex items-center justify-center px-1 font-mono text-[11px] font-black tracking-wider uppercase transition-all duration-200 cursor-pointer relative ${
                   isSelected
@@ -518,6 +596,7 @@ export default function App() {
             signal={currentSignal}
             timeframe={activeTimeframe}
             historyLength={currentHistory.length}
+            latestPeriod={currentHistory[currentHistory.length - 1]?.period || null}
             sourceMode="api"
             isFetching={Boolean(isFetching[activeTimeframe])}
             errorMessage={currentError}
@@ -551,6 +630,7 @@ export default function App() {
         <HistoryTimeline
           history={currentHistory}
           timeframe={activeTimeframe}
+          ledger={ledgers[activeTimeframe] || []}
           isAdmin={isAdmin}
           onAddResult={handleAddSingleResult}
           onClearHistory={handleClearHistory}
@@ -585,6 +665,8 @@ export default function App() {
         isOpen={isOverlayOpen}
         signal={currentSignal}
         timeframe={activeTimeframe}
+        latestPeriod={currentHistory[currentHistory.length - 1]?.period || null}
+        serverTimeOffset={serverTimeOffset}
         onClose={() => setIsOverlayOpen(false)}
         onGenerate={handleGenerateSignal}
         onRoundExpire={() => syncWithServer()}

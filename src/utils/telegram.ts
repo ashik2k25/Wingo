@@ -258,8 +258,18 @@ export async function sendTelegramSignal(tf: Timeframe, signal: Signal): Promise
       ? `💎 <b>PRIMARY PLAY:</b> <b>${formatColorLabel(signal.color)}</b> <i>(Safe Color Hedge)</i>`
       : `💎 <b>PRIMARY PLAY:</b> <b>${formatSizeLabel(signal.size)}</b>`;
 
+  const stakingLevel = signal.stakingLevel || 'LEVEL 1 (1X)';
+  const multiplier = signal.suggestedMultiplier || 1;
+  const stakeLine = `💰 <b>VIP STAKING:</b> <code>${stakingLevel}</code> ${
+    multiplier > 1 ? `<i>(${multiplier}X Recovery Stake)</i>` : '<i>(Base Unit)</i>'
+  }`;
+
+  const streakGuardLine = signal.lossStreakPrevented
+    ? `🛡 <b>CIRCUIT BREAKER:</b> 🚨 <code>VIP RECOVERY LOCK (Streak: ${signal.consecutiveLosses || 2} - Auto-Corrected)</code>`
+    : `🛡 <b>CIRCUIT BREAKER:</b> <code>Active (Loss Guard: ${signal.consecutiveLosses || 0} / 3)</code>`;
+
   const advisoryLine = signal.advisoryNote ? `💡 <b>Strategic Intel:</b> <i>${signal.advisoryNote}</i>` : '';
-  const hedgeLine = signal.hedgeTip ? `🛡 <b>Bankroll Hedge:</b> <i>${signal.hedgeTip}</i>` : '';
+  const hedgeLine = signal.hedgeTip ? `⚖ <b>Bankroll Hedge:</b> <i>${signal.hedgeTip}</i>` : '';
 
   const message = [
     `✨ <b>NUMBER SHOT PRO</b> • <i>VIP INTELLIGENCE</i> ✨`,
@@ -273,6 +283,8 @@ export async function sendTelegramSignal(tf: Timeframe, signal: Signal): Promise
     `• <b>Lucky Number:</b> <code>[ ${signal.number} ]</code>`,
     ``,
     primaryPlay,
+    stakeLine,
+    streakGuardLine,
     advisoryLine,
     hedgeLine,
     `━━━━━━━━━━━━━━━━━━━━━━`,

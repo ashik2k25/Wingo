@@ -189,9 +189,6 @@ function calculateCategoryShare(dist, category) {
     return acc;
   }, 0);
 }
-function selectMaxCategory(options, evaluator) {
-  return options.reduce((best, curr) => evaluator(curr) > evaluator(best) ? curr : best);
-}
 function runBacktest(history) {
   if (history.length < 15) return null;
   const start = Math.max(10, history.length - 30);
@@ -201,12 +198,10 @@ function runBacktest(history) {
   let colorHits = 0;
   for (let i = start; i < history.length; i++) {
     const trainingSlice = history.slice(0, i);
+    const analysis = analyzeSizeAndPattern(trainingSlice);
     const dist = calculateModelDistribution(trainingSlice);
+    const predSize = analysis.recommendedSize;
     const predNumber = dist.indexOf(Math.max(...dist));
-    const predSize = selectMaxCategory(
-      ["SMALL", "BIG"],
-      (s) => calculateCategoryShare(dist, s)
-    );
     const predColor = getColor(predNumber);
     const actual = history[i].number;
     samples += 1;
@@ -216,7 +211,266 @@ function runBacktest(history) {
   }
   return { samples, numberHits, sizeHits, colorHits };
 }
-function analyzeSizeAndPattern(history) {
+function detectHumanBrainPattern(sizes, history) {
+  const n = sizes.length;
+  if (n < 2) return null;
+  if (history && history.length >= 2) {
+    const lastNum = history[history.length - 1].number;
+    const prevNum = history[history.length - 2].number;
+    if (lastNum === prevNum && lastNum >= 0 && lastNum <= 9) {
+      const reboundSize = lastNum <= 4 ? "BIG" : "SMALL";
+      return {
+        predictedSize: reboundSize,
+        confidence: 0.97,
+        patternType: "NUMBER_REBOUND",
+        patternName: `Twin ${lastNum} Mean-Reversion (${lastNum}->${lastNum} -> ${reboundSize})`,
+        advisoryNote: `\u{1F9E0} HUMAN BRAIN: Twin ${lastNum} repeat detected! Rebound to ${reboundSize} locked (User Golden Rule).`,
+        hedgeTip: `Bet ${reboundSize} strictly on twin ${lastNum} rebound.`
+      };
+    }
+  }
+  if (history && history.length >= 4) {
+    const recent = history.slice(-6);
+    const lastDraw = recent[recent.length - 1];
+    const prevDraw = recent[recent.length - 2];
+    const lastColor = getColor(lastDraw.number);
+    const prevColor = getColor(prevDraw.number);
+    if (lastColor !== prevColor && lastColor !== "RED_VIOLET" && lastColor !== "GREEN_VIOLET") {
+      let streakBefore = 0;
+      for (let i = recent.length - 2; i >= 0; i--) {
+        if (getColor(recent[i].number) === prevColor) streakBefore++;
+        else break;
+      }
+      if (streakBefore >= 3) {
+        const carrySize = getSize(lastDraw.number);
+        return {
+          predictedSize: carrySize,
+          confidence: 0.95,
+          patternType: "COLOR_INERTIA",
+          patternName: `Color-Cut Size Inertia (${prevColor} streak cut -> Size ${carrySize})`,
+          advisoryNote: `\u{1F9E0} HUMAN BRAIN: ${prevColor} color streak cut. Size inertia to ${carrySize} locked (User Color Rule).`,
+          hedgeTip: `Follow ${carrySize} continuation after color cut.`
+        };
+      }
+    }
+    let activeColorCount = 0;
+    const currCol = getColor(lastDraw.number);
+    if (currCol === "RED" || currCol === "GREEN") {
+      for (let i = recent.length - 1; i >= 0; i--) {
+        if (getColor(recent[i].number) === currCol) activeColorCount++;
+        else break;
+      }
+      if (activeColorCount >= 4) {
+        const colorBias = currCol === "GREEN" ? "BIG" : "SMALL";
+        return {
+          predictedSize: colorBias,
+          confidence: 0.93,
+          patternType: "COLOR_INERTIA",
+          patternName: `Color Dragon Momentum (${activeColorCount}x ${currCol} -> ${colorBias})`,
+          advisoryNote: `\u{1F9E0} HUMAN BRAIN: Strong ${activeColorCount}x ${currCol} color dragon active. ${colorBias} mathematically favored.`,
+          hedgeTip: `Ride ${currCol} dragon bias with ${colorBias}.`
+        };
+      }
+    }
+  }
+  if (n < 4) return null;
+  const lastSize = sizes[n - 1];
+  let activeStreak = 0;
+  for (let i = n - 1; i >= 0; i--) {
+    if (sizes[i] === lastSize) activeStreak++;
+    else break;
+  }
+  if (activeStreak >= 3) {
+    const isExhausted = activeStreak >= 7;
+    const targetSize = isExhausted ? lastSize === "BIG" ? "SMALL" : "BIG" : lastSize;
+    return {
+      predictedSize: targetSize,
+      confidence: isExhausted ? 0.78 : Math.min(0.96, 0.84 + activeStreak * 0.02),
+      patternType: "STREAK",
+      patternName: `${activeStreak}x ${lastSize} Dragon`,
+      advisoryNote: isExhausted ? `\u{1F6A8} Mature ${activeStreak}x ${lastSize} dragon reached ceiling. Anti-drag pivot alert to ${targetSize}.` : `\u{1F9E0} HUMAN BRAIN: Active ${activeStreak}x ${lastSize} dragon momentum. Riding trend securely.`,
+      hedgeTip: isExhausted ? "Color hedge strongly recommended." : "Ride active dragon trend."
+    };
+  }
+  const sampleSlice = sizes.slice(-Math.min(n, 24));
+  const runs = [];
+  let currRun = 1;
+  for (let i = 1; i < sampleSlice.length; i++) {
+    if (sampleSlice[i] === sampleSlice[i - 1]) {
+      currRun++;
+    } else {
+      runs.push({ size: sampleSlice[i - 1], len: currRun });
+      currRun = 1;
+    }
+  }
+  runs.push({ size: sampleSlice[sampleSlice.length - 1], len: currRun });
+  if (runs.length >= 4) {
+    const closedRuns = runs.slice(0, -1);
+    const maxClosedRun = Math.max(...closedRuns.map((r) => r.len));
+    const currentRunLen = runs[runs.length - 1].len;
+    if (maxClosedRun <= 2 && currentRunLen === 2) {
+      const opposite = lastSize === "BIG" ? "SMALL" : "BIG";
+      return {
+        predictedSize: opposite,
+        confidence: 0.93,
+        patternType: "CUT_AT_2",
+        patternName: "Double-Cut Table (Max Streak 2)",
+        advisoryNote: `\u{1F9E0} HUMAN BRAIN: Double-Cut Table (No streak > 2) verified across board. 2x ${lastSize} reached ceiling -> Cut to ${opposite} locked.`,
+        hedgeTip: `Cut to ${opposite} on 2-streak limit.`
+      };
+    }
+    if (maxClosedRun <= 3 && currentRunLen === 3) {
+      const opposite = lastSize === "BIG" ? "SMALL" : "BIG";
+      return {
+        predictedSize: opposite,
+        confidence: 0.92,
+        patternType: "CUT_AT_3",
+        patternName: "Triple-Cut Table (Max Streak 3)",
+        advisoryNote: `\u{1F9E0} HUMAN BRAIN: Triple-Cut Table (No streak > 3) verified. 3x ${lastSize} reached ceiling -> Cut to ${opposite} locked.`,
+        hedgeTip: `Cut to ${opposite} on 3-streak limit.`
+      };
+    }
+  }
+  for (const lag of [3, 2, 4, 6, 5]) {
+    if (n < lag * 2) continue;
+    const testCount = Math.min(n - lag, 18);
+    let matchCount = 0;
+    for (let j = 0; j < testCount; j++) {
+      if (sizes[n - 1 - j] === sizes[n - 1 - j - lag]) {
+        matchCount++;
+      }
+    }
+    const matchRate = matchCount / testCount;
+    const isMatch = lag === 3 && (testCount >= 3 && matchRate === 1 || testCount >= 4 && matchRate >= 0.7) || lag === 2 && (testCount >= 2 && matchRate === 1 || testCount >= 4 && matchRate >= 0.75) || lag === 4 && (testCount >= 3 && matchRate >= 0.85 || testCount >= 4 && matchRate >= 0.75) || lag === 6 && testCount >= 4 && matchRate >= 0.75 || lag === 5 && testCount >= 5 && matchRate >= 0.75;
+    if (isMatch) {
+      const projected = sizes[n - lag];
+      let patternType = "PERIODIC";
+      let patternName = `Harmonic Cadence (Period ${lag})`;
+      if (lag === 3) {
+        const last3 = sizes.slice(-3);
+        const bigCount3 = last3.filter((s) => s === "BIG").length;
+        if (bigCount3 === 2) {
+          patternType = "CYCLE_2_1";
+          patternName = "2-1 Pattern (Big-Big-Small)";
+        } else if (bigCount3 === 1) {
+          patternType = "CYCLE_1_2";
+          patternName = "1-2 Pattern (Small-Small-Big)";
+        } else {
+          patternType = "CYCLE_2_1";
+          patternName = "3-Step Cycle";
+        }
+      } else if (lag === 2) {
+        patternType = "CHOP";
+        patternName = "1-1 Ping-Pong Alternation";
+      } else if (lag === 4) {
+        patternType = "DOUBLE";
+        patternName = "2-2 Double Pair Rhythm";
+      } else if (lag === 6) {
+        patternType = "PERIODIC";
+        patternName = "3-3 Triple Rhythm Cadence";
+      }
+      const matchPct = Math.round(matchRate * 100);
+      return {
+        predictedSize: projected,
+        confidence: Math.min(0.96, 0.78 + matchRate * 0.18),
+        patternType,
+        patternName,
+        advisoryNote: `\u{1F9E0} HUMAN BRAIN: ${patternName} locked (${matchPct}% cycle stability). Next projected: ${projected}.`,
+        hedgeTip: `Follow ${patternName} cadence strictly.`
+      };
+    }
+  }
+  if (n >= 4) {
+    const s1 = sizes[n - 1];
+    const s2 = sizes[n - 2];
+    const s3 = sizes[n - 3];
+    const s4 = n >= 5 ? sizes[n - 4] : null;
+    if (s1 === s2 && s1 !== s3 && (!s4 || s4 !== s3)) {
+      const archSize = s3;
+      return {
+        predictedSize: archSize,
+        confidence: 0.89,
+        patternType: "BRIDGE_MIRROR",
+        patternName: `1-2-1 Arch Symmetry [${s3}-${s2}-${s1}] -> ${archSize}`,
+        advisoryNote: `\u{1F9E0} HUMAN BRAIN: 1-2-1 Bridge arch symmetry detected. Closing arch with ${archSize}.`,
+        hedgeTip: `Lock ${archSize} for bridge symmetry completion.`
+      };
+    }
+    if (s4 && s1 === s2 && s2 === s3 && s1 !== s4) {
+      const pyramidSize = s4;
+      return {
+        predictedSize: pyramidSize,
+        confidence: 0.9,
+        patternType: "BRIDGE_MIRROR",
+        patternName: `1-3-1 Pyramid Symmetry -> ${pyramidSize}`,
+        advisoryNote: `\u{1F9E0} HUMAN BRAIN: 1-3-1 Pyramid arch symmetry detected. Closing arch with ${pyramidSize}.`,
+        hedgeTip: `Lock ${pyramidSize} for pyramid symmetry completion.`
+      };
+    }
+  }
+  for (const k of [4, 3, 2]) {
+    if (n <= k + 2) continue;
+    const suffix = sizes.slice(n - k);
+    let bigWeight = 0;
+    let smallWeight = 0;
+    let occurrences = 0;
+    for (let i = 0; i <= n - 1 - k; i++) {
+      let match = true;
+      for (let m = 0; m < k; m++) {
+        if (sizes[i + m] !== suffix[m]) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
+        const nextDraw = sizes[i + k];
+        const recencyWeight = 1 + i / n * 1.5;
+        if (nextDraw === "BIG") bigWeight += recencyWeight;
+        else if (nextDraw === "SMALL") smallWeight += recencyWeight;
+        occurrences++;
+      }
+    }
+    if (occurrences >= 2) {
+      const totalWeight = bigWeight + smallWeight;
+      const bigShare = bigWeight / totalWeight;
+      const smallShare = smallWeight / totalWeight;
+      if (bigShare >= 0.65 || smallShare >= 0.65) {
+        const bestSize = bigShare > smallShare ? "BIG" : "SMALL";
+        const bestShare = Math.max(bigShare, smallShare);
+        const motif = suffix.map((s) => s === "BIG" ? "B" : "S").join("-");
+        const patternType = k === 2 && suffix[0] !== suffix[1] ? "CHOP" : "DOUBLE";
+        return {
+          predictedSize: bestSize,
+          confidence: Math.min(0.94, 0.74 + bestShare * 0.2),
+          patternType,
+          patternName: `Sequence Motif [${motif}] -> ${bestSize}`,
+          advisoryNote: `\u{1F9E0} HUMAN BRAIN: [${motif}] motif repetition detected (${occurrences} matches, ${(bestShare * 100).toFixed(0)}% follow-through).`,
+          hedgeTip: `Ride [${motif}] -> ${bestSize} continuation.`
+        };
+      }
+    }
+  }
+  return null;
+}
+function computeRecentLossStreak(history) {
+  if (history.length < 5) return 0;
+  const startIdx = Math.max(0, history.length - 12);
+  let streak = 0;
+  for (let i = startIdx; i < history.length; i++) {
+    const past = history.slice(0, i);
+    if (past.length < 5) continue;
+    const analysis = analyzeSizeAndPattern(past, streak);
+    const simPred = analysis.recommendedSize;
+    const actual = getSize(history[i].number);
+    if (simPred === actual) {
+      streak = 0;
+    } else {
+      streak++;
+    }
+  }
+  return streak;
+}
+function analyzeSizeAndPattern(history, knownLossStreak) {
   const activeHistory = history.slice(-10);
   const len = activeHistory.length;
   if (len === 0) {
@@ -229,14 +483,14 @@ function analyzeSizeAndPattern(history) {
       colorSafety: "SAFE",
       advisoryNote: "Initial board state.",
       hedgeTip: "Standard play.",
-      activeStreak: 1
+      activeStreak: 1,
+      stakingLevel: "LEVEL 1 (1X)",
+      suggestedMultiplier: 1,
+      consecutiveLosses: 0,
+      lossStreakPrevented: false
     };
   }
-  const dist = calculateModelDistribution(activeHistory);
-  const bigShare = calculateCategoryShare(dist, "BIG");
-  const smallShare = calculateCategoryShare(dist, "SMALL");
-  const recommendedSize = bigShare >= smallShare ? "BIG" : "SMALL";
-  const sizeConfidence = Math.max(bigShare, smallShare);
+  const allSizes = history.map((h) => getSize(h.number));
   const numbers = activeHistory.map((h) => h.number);
   const lastNum = numbers[len - 1];
   const lastSize = getSize(lastNum);
@@ -245,51 +499,118 @@ function analyzeSizeAndPattern(history) {
     if (getSize(numbers[i]) === lastSize) activeStreak++;
     else break;
   }
-  const isChop = len >= 4 && getSize(numbers[len - 1]) !== getSize(numbers[len - 2]) && getSize(numbers[len - 2]) === getSize(numbers[len - 4]) && getSize(numbers[len - 1]) === getSize(numbers[len - 3]);
-  const bigCount = numbers.filter((n) => n >= 5).length;
-  const smallCount = len - bigCount;
-  const isSaturated = bigCount >= 7 || smallCount >= 7;
-  const isViolet0 = lastNum === 0;
-  const isViolet5 = lastNum === 5;
+  const humanPattern = detectHumanBrainPattern(allSizes, history);
+  const dist = calculateModelDistribution(activeHistory);
+  const bigShare = calculateCategoryShare(dist, "BIG");
+  const smallShare = calculateCategoryShare(dist, "SMALL");
+  const statRecommendedSize = bigShare >= smallShare ? "BIG" : "SMALL";
+  const statConfidence = Math.max(bigShare, smallShare);
+  let recommendedSize = statRecommendedSize;
+  let sizeConfidence = statConfidence;
   let patternType = "NORMAL";
   let sizeSafety = "SAFE";
   let advisoryNote = "";
   let hedgeTip = "";
-  if (isChop) {
-    patternType = "CHOP";
-    sizeSafety = "SAFE";
-    advisoryNote = "1-1 Alternation (Ping-Pong) rhythm confirmed. Cadence followed.";
-    hedgeTip = "Follow alternating rhythm safely.";
-  } else if (activeStreak >= 6) {
-    patternType = "STREAK";
-    sizeSafety = "RISKY";
-    advisoryNote = `Mature ${activeStreak}x ${lastSize} dragon reached exhaustion ceiling.`;
-    hedgeTip = "Prioritize COLOR bet for bankroll protection.";
-  } else if (activeStreak >= 2) {
-    patternType = "STREAK";
-    sizeSafety = activeStreak >= 4 ? "MEDIUM" : "SAFE";
-    advisoryNote = `Active ${activeStreak}x ${lastSize} momentum trend. Riding the wave safely.`;
-    hedgeTip = activeStreak >= 4 ? "Watch for Violet 0/5 pivot." : "Follow trend momentum.";
-  } else if (isViolet0 && len >= 2 && getSize(numbers[len - 2]) === "BIG") {
-    patternType = "CHOP";
-    sizeSafety = "SAFE";
-    advisoryNote = "Violet 0 structural pivot: Big trend broken, Small reset initiated.";
-    hedgeTip = "Color RED hedge supported.";
-  } else if (isViolet5 && len >= 2 && getSize(numbers[len - 2]) === "SMALL") {
-    patternType = "CHOP";
-    sizeSafety = "SAFE";
-    advisoryNote = "Violet 5 structural pivot: Small trend broken, Big reset initiated.";
-    hedgeTip = "Color GREEN hedge supported.";
-  } else if (isSaturated) {
-    patternType = "NORMAL";
-    sizeSafety = "MEDIUM";
-    advisoryNote = `Anti-Blind filter active: ${Math.max(bigCount, smallCount)} of 10 draws were ${bigCount >= smallCount ? "BIG" : "SMALL"}. Damping applied.`;
-    hedgeTip = "Balanced play with Color hedge.";
+  if (humanPattern) {
+    recommendedSize = humanPattern.predictedSize;
+    sizeConfidence = humanPattern.confidence;
+    patternType = humanPattern.patternType;
+    sizeSafety = activeStreak >= 7 ? "RISKY" : "SAFE";
+    advisoryNote = humanPattern.advisoryNote;
+    hedgeTip = humanPattern.hedgeTip;
   } else {
+    recommendedSize = statRecommendedSize;
+    sizeConfidence = statConfidence;
     patternType = "NORMAL";
-    sizeSafety = sizeConfidence >= 0.58 ? "SAFE" : "MEDIUM";
+    sizeSafety = activeStreak >= 7 ? "RISKY" : sizeConfidence >= 0.58 ? "SAFE" : "MEDIUM";
     advisoryNote = "Markov probability and frequency momentum aligned.";
     hedgeTip = "Standard balanced play.";
+  }
+  const consecutiveLosses = knownLossStreak !== void 0 ? knownLossStreak : computeRecentLossStreak(history);
+  let lossStreakPrevented = false;
+  let stakingLevel = "LEVEL 1 (1X BASE)";
+  let suggestedMultiplier = 1;
+  if (consecutiveLosses >= 2) {
+    lossStreakPrevented = true;
+    const last1 = getSize(numbers[len - 1]);
+    const last2 = len >= 2 ? getSize(numbers[len - 2]) : last1;
+    const last3 = len >= 3 ? getSize(numbers[len - 3]) : last2;
+    if (humanPattern && humanPattern.patternType === "NUMBER_REBOUND") {
+      recommendedSize = humanPattern.predictedSize;
+      patternType = "NUMBER_REBOUND";
+      sizeConfidence = 0.98;
+      advisoryNote = `\u{1F6A8} VIP RECOVERY LOCK: ${humanPattern.advisoryNote}`;
+      hedgeTip = "Twin Number Rebound recovery stake.";
+    } else if (consecutiveLosses >= 3) {
+      if (last1 === last2) {
+        recommendedSize = last1;
+        advisoryNote = `\u{1F6A8} EMERGENCY CIRCUIT BREAKER LEVEL 4: Momentum trend on ${last1} locked to terminate streak.`;
+      } else {
+        recommendedSize = last1 === "BIG" ? "SMALL" : "BIG";
+        advisoryNote = `\u{1F6A8} EMERGENCY CIRCUIT BREAKER LEVEL 4: Alternation locked on ${recommendedSize} to terminate streak.`;
+      }
+      patternType = "EMERGENCY_LOCK";
+      sizeConfidence = 0.99;
+      hedgeTip = "Level 4 Max Stake - Streak Termination Guarantee.";
+    } else {
+      if (last1 === last2) {
+        recommendedSize = last1;
+        patternType = "STREAK";
+        advisoryNote = `\u{1F6A8} VIP CIRCUIT BREAKER LEVEL 3: Micro-trend on ${last1} locked to secure rebound.`;
+      } else if (last1 !== last2 && last2 !== last3) {
+        recommendedSize = last1 === "BIG" ? "SMALL" : "BIG";
+        patternType = "CHOP";
+        advisoryNote = `\u{1F6A8} VIP CIRCUIT BREAKER LEVEL 3: Alternation locked on ${recommendedSize} to secure rebound.`;
+      } else if (humanPattern && humanPattern.predictedSize === last1) {
+        recommendedSize = humanPattern.predictedSize;
+        patternType = humanPattern.patternType;
+        advisoryNote = `\u{1F6A8} VIP CIRCUIT BREAKER LEVEL 3: ${humanPattern.advisoryNote}`;
+      } else {
+        recommendedSize = statRecommendedSize === "BIG" ? "SMALL" : "BIG";
+        patternType = "ANTI_PHASE_INVERSION";
+        advisoryNote = `\u{1F6A8} VIP CIRCUIT BREAKER LEVEL 3: Anti-phase market detected. Inverting prediction to ${recommendedSize}.`;
+      }
+      sizeConfidence = 0.95;
+      hedgeTip = "Level 3 Stake (5X Rebound).";
+    }
+    if (consecutiveLosses >= 4) {
+      stakingLevel = `LEVEL 5 (15X MAX DEFENSE)`;
+      suggestedMultiplier = 15;
+    } else if (consecutiveLosses === 3) {
+      stakingLevel = `LEVEL 4 (8X REBOUND)`;
+      suggestedMultiplier = 8;
+    } else {
+      stakingLevel = `LEVEL 3 (5X REBOUND)`;
+      suggestedMultiplier = 5;
+    }
+  } else if (consecutiveLosses === 1) {
+    stakingLevel = "LEVEL 2 (2X RECOVERY)";
+    suggestedMultiplier = 2;
+    if (humanPattern && humanPattern.patternType === "NUMBER_REBOUND") {
+      recommendedSize = humanPattern.predictedSize;
+      patternType = "NUMBER_REBOUND";
+      sizeConfidence = 0.96;
+      advisoryNote = `\u{1F6E1}\uFE0F LEVEL 2 DEFENSE: ${humanPattern.advisoryNote}`;
+      hedgeTip = `Level 2 Stake on Twin Number Rebound.`;
+    } else if (humanPattern) {
+      recommendedSize = humanPattern.predictedSize;
+      sizeConfidence = Math.max(0.88, humanPattern.confidence);
+      advisoryNote = `\u{1F6E1}\uFE0F LEVEL 2 DEFENSE: ${humanPattern.advisoryNote}`;
+      hedgeTip = `Level 2 Stake (2X Recovery).`;
+    } else {
+      const last1 = getSize(numbers[len - 1]);
+      const last2 = len >= 2 ? getSize(numbers[len - 2]) : last1;
+      if (last1 === last2) {
+        recommendedSize = last1;
+        advisoryNote = `\u{1F6E1}\uFE0F LEVEL 2 DEFENSE: Aligning with active ${last1} pair.`;
+      } else {
+        advisoryNote = advisoryNote || "Level 2 Play: Micro-trend rhythm aligned.";
+      }
+      hedgeTip = "Level 2 Stake (2X Recovery).";
+    }
+  } else {
+    stakingLevel = "LEVEL 1 (1X BASE)";
+    suggestedMultiplier = 1;
   }
   const primaryBet = sizeSafety === "RISKY" ? "COLOR" : "SIZE";
   const colorSafety = sizeSafety === "RISKY" ? "SAFE" : "MEDIUM";
@@ -302,14 +623,18 @@ function analyzeSizeAndPattern(history) {
     colorSafety,
     advisoryNote,
     hedgeTip,
-    activeStreak
+    activeStreak,
+    lossStreakPrevented,
+    consecutiveLosses,
+    stakingLevel,
+    suggestedMultiplier
   };
 }
-function buildSignal(history) {
+function buildSignal(history, knownLossStreak) {
   if (!history || history.length < 5) return null;
   const activeHistory = history.slice(-10);
   const dist = calculateModelDistribution(activeHistory);
-  const patternAnalysis = analyzeSizeAndPattern(activeHistory);
+  const patternAnalysis = analyzeSizeAndPattern(history, knownLossStreak);
   const bestSize = patternAnalysis.recommendedSize;
   const adjustedDist = dist.map((prob, num) => {
     const isMatchingSize = getSize(num) === bestSize;
@@ -333,7 +658,11 @@ function buildSignal(history) {
     colorSafety: patternAnalysis.colorSafety,
     patternType: patternAnalysis.patternType,
     advisoryNote: patternAnalysis.advisoryNote,
-    hedgeTip: patternAnalysis.hedgeTip
+    hedgeTip: patternAnalysis.hedgeTip,
+    lossStreakPrevented: patternAnalysis.lossStreakPrevented,
+    consecutiveLosses: patternAnalysis.consecutiveLosses,
+    stakingLevel: patternAnalysis.stakingLevel,
+    suggestedMultiplier: patternAnalysis.suggestedMultiplier
   };
 }
 function safeString(v) {
@@ -568,8 +897,12 @@ async function sendTelegramSignal(tf, signal) {
   const confidence = (Math.max(signal.numberShare, signal.sizeShare) * 100).toFixed(1);
   const tfName = tf === "30S" ? "WinGo 30 SEC" : `WinGo ${tf.replace("M", " MIN")}`;
   const primaryPlay = signal.primaryBet === "COLOR" ? `\u{1F48E} <b>PRIMARY PLAY:</b> <b>${formatColorLabel(signal.color)}</b> <i>(Safe Color Hedge)</i>` : `\u{1F48E} <b>PRIMARY PLAY:</b> <b>${formatSizeLabel(signal.size)}</b>`;
+  const stakingLevel = signal.stakingLevel || "LEVEL 1 (1X)";
+  const multiplier = signal.suggestedMultiplier || 1;
+  const stakeLine = `\u{1F4B0} <b>VIP STAKING:</b> <code>${stakingLevel}</code> ${multiplier > 1 ? `<i>(${multiplier}X Recovery Stake)</i>` : "<i>(Base Unit)</i>"}`;
+  const streakGuardLine = signal.lossStreakPrevented ? `\u{1F6E1} <b>CIRCUIT BREAKER:</b> \u{1F6A8} <code>VIP RECOVERY LOCK (Streak: ${signal.consecutiveLosses || 2} - Auto-Corrected)</code>` : `\u{1F6E1} <b>CIRCUIT BREAKER:</b> <code>Active (Loss Guard: ${signal.consecutiveLosses || 0} / 3)</code>`;
   const advisoryLine = signal.advisoryNote ? `\u{1F4A1} <b>Strategic Intel:</b> <i>${signal.advisoryNote}</i>` : "";
-  const hedgeLine = signal.hedgeTip ? `\u{1F6E1} <b>Bankroll Hedge:</b> <i>${signal.hedgeTip}</i>` : "";
+  const hedgeLine = signal.hedgeTip ? `\u2696 <b>Bankroll Hedge:</b> <i>${signal.hedgeTip}</i>` : "";
   const message = [
     `\u2728 <b>NUMBER SHOT PRO</b> \u2022 <i>VIP INTELLIGENCE</i> \u2728`,
     `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501`,
@@ -582,6 +915,8 @@ async function sendTelegramSignal(tf, signal) {
     `\u2022 <b>Lucky Number:</b> <code>[ ${signal.number} ]</code>`,
     ``,
     primaryPlay,
+    stakeLine,
+    streakGuardLine,
     advisoryLine,
     hedgeLine,
     `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501`,
@@ -684,6 +1019,72 @@ var masterState = {
   },
   serverTime: Date.now()
 };
+var trackedSignals = {
+  "30S": null,
+  "1M": null,
+  "3M": null,
+  "5M": null
+};
+var authoritativeLossStreak = {
+  "30S": 0,
+  "1M": 0,
+  "3M": 0,
+  "5M": 0
+};
+var CACHE_FILE = path2.resolve(process.env.STATE_CACHE_DIR || "/tmp", "wingo_master_cache.json");
+function saveMasterStateToDisk() {
+  try {
+    const dataToSave = {
+      histories: masterState.histories,
+      signals: masterState.signals,
+      endpoints: masterState.endpoints,
+      updatedAt: masterState.updatedAt,
+      lastFetchedPeriod: masterState.lastFetchedPeriod,
+      trackedSignals,
+      authoritativeLossStreak,
+      savedAt: Date.now()
+    };
+    fs2.writeFileSync(CACHE_FILE, JSON.stringify(dataToSave), "utf-8");
+  } catch (err) {
+  }
+}
+function loadMasterStateFromDisk() {
+  try {
+    if (fs2.existsSync(CACHE_FILE)) {
+      const raw = fs2.readFileSync(CACHE_FILE, "utf-8");
+      const loaded = JSON.parse(raw);
+      if (loaded && loaded.histories) {
+        for (const tf of TIMEFRAMES) {
+          if (Array.isArray(loaded.histories[tf]) && loaded.histories[tf].length > 0) {
+            masterState.histories[tf] = loaded.histories[tf];
+          }
+          if (loaded.signals && loaded.signals[tf]) {
+            masterState.signals[tf] = loaded.signals[tf];
+          }
+          if (loaded.endpoints && loaded.endpoints[tf]) {
+            masterState.endpoints[tf] = loaded.endpoints[tf];
+          }
+          if (loaded.updatedAt && loaded.updatedAt[tf]) {
+            masterState.updatedAt[tf] = loaded.updatedAt[tf];
+          }
+          if (loaded.lastFetchedPeriod && loaded.lastFetchedPeriod[tf]) {
+            masterState.lastFetchedPeriod[tf] = loaded.lastFetchedPeriod[tf];
+          }
+        }
+        if (loaded.trackedSignals) {
+          Object.assign(trackedSignals, loaded.trackedSignals);
+        }
+        if (loaded.authoritativeLossStreak) {
+          Object.assign(authoritativeLossStreak, loaded.authoritativeLossStreak);
+        }
+        console.log("[Cache] Master state successfully restored from disk cache");
+      }
+    }
+  } catch (err) {
+    console.warn("[Cache] Could not restore disk cache:", err?.message);
+  }
+}
+loadMasterStateFromDisk();
 var sseClients = [];
 function broadcastToClients(eventType, data) {
   const payload = `event: ${eventType}
@@ -756,23 +1157,45 @@ async function syncTimeframeOnServer(tf) {
     for (const item of freshDraws) {
       map.set(item.period, item);
     }
-    const merged = Array.from(map.values()).sort((a, b) => a.period.localeCompare(b.period, void 0, { numeric: true })).slice(-16);
+    const merged = Array.from(map.values()).sort((a, b) => a.period.localeCompare(b.period, void 0, { numeric: true })).slice(-36);
     const prevLatest = masterState.lastFetchedPeriod[tf];
     const newLatest = merged[merged.length - 1]?.period || null;
     const hasNewRound = !prevLatest || prevLatest !== newLatest;
+    if (merged.length > 0) {
+      const prevDispatched = trackedSignals[tf];
+      if (prevDispatched) {
+        const matchedDraw = merged.find((d) => d.period === prevDispatched.targetPeriod);
+        if (matchedDraw) {
+          const actualSize = getSize(matchedDraw.number);
+          if (prevDispatched.size === actualSize) {
+            authoritativeLossStreak[tf] = 0;
+            console.log(`[Resolution] ${tf} Period ${matchedDraw.period}: WIN \u2705 (${actualSize}) - Streak reset to 0`);
+          } else {
+            authoritativeLossStreak[tf] += 1;
+            console.log(`[Resolution] ${tf} Period ${matchedDraw.period}: LOSS \u274C (Predicted ${prevDispatched.size}, Actual ${actualSize}) - Streak: ${authoritativeLossStreak[tf]}`);
+          }
+          trackedSignals[tf] = null;
+        }
+      }
+    }
     masterState.histories[tf] = merged;
     masterState.lastFetchedPeriod[tf] = newLatest;
     masterState.updatedAt[tf] = (/* @__PURE__ */ new Date()).toISOString();
     masterState.serverTime = Date.now();
     if (hasNewRound || !masterState.signals[tf]) {
-      const newSignal = buildSignal(merged);
+      const newSignal = buildSignal(merged, authoritativeLossStreak[tf]);
       if (newSignal) {
         masterState.signals[tf] = newSignal;
+        trackedSignals[tf] = {
+          targetPeriod: newSignal.targetPeriod,
+          size: newSignal.size
+        };
         sendTelegramSignal(tf, newSignal).catch((err) => {
           console.warn("[Telegram dispatch]", err?.message);
         });
       }
     }
+    saveMasterStateToDisk();
     broadcastToClients("signal-update", {
       tf,
       history: masterState.histories[tf],
@@ -821,7 +1244,71 @@ function startBackgroundScheduler() {
   setInterval(() => {
     broadcastToClients("ping", { serverTime: Date.now() });
   }, 15e3);
+  setInterval(() => {
+    pollTelegramUpdates().catch(() => {
+    });
+  }, 15e3);
 }
+var totalCronTicks = 0;
+var lastCronTickTime = 0;
+var lastCronTickIp = "";
+app.all(["/api/cron/tick", "/api/cron/sync"], async (req, res) => {
+  totalCronTicks++;
+  lastCronTickTime = Date.now();
+  lastCronTickIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown";
+  pollTelegramUpdates().catch(() => {
+  });
+  const syncResults = {};
+  await Promise.allSettled(
+    TIMEFRAMES.map(async (tf) => {
+      const ok = await syncTimeframeOnServer(tf);
+      syncResults[tf] = {
+        period: masterState.lastFetchedPeriod[tf],
+        synced: ok,
+        signalAvailable: !!masterState.signals[tf]
+      };
+    })
+  );
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.json({
+    success: true,
+    status: "TICK_EXECUTED",
+    timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+    serverTime: Date.now(),
+    cloudRunKeepAlive: true,
+    totalTicksReceived: totalCronTicks,
+    callerIp: lastCronTickIp,
+    subscribersCount: telegramConfig.subscriberCount,
+    timeframes: syncResults
+  });
+});
+app.get(["/api/health", "/api/cron/keepalive"], (_req, res) => {
+  res.status(200).json({
+    status: "HEALTHY",
+    service: "wingo-signals-cloud-run",
+    timestamp: Date.now(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    totalCronTicks,
+    lastCronTickTime
+  });
+});
+app.get("/api/cron/status", (req, res) => {
+  const host = req.headers["host"] || "localhost:3000";
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  const fullBaseUrl = `${proto}://${host}`;
+  const isWarmed = Date.now() - lastCronTickTime < 18e4;
+  res.json({
+    active: isWarmed,
+    totalTicks: totalCronTicks,
+    lastTickTime: lastCronTickTime,
+    lastTickAgoSec: lastCronTickTime ? Math.floor((Date.now() - lastCronTickTime) / 1e3) : null,
+    cronEndpoint: `${fullBaseUrl}/api/cron/tick`,
+    healthEndpoint: `${fullBaseUrl}/api/health`,
+    recommendedSchedule: "* * * * *",
+    gcloudCommand: `gcloud scheduler jobs create http wingo-telegram-bot-sync --location=asia-east1 --schedule="* * * * *" --uri="${fullBaseUrl}/api/cron/tick" --http-method=GET --time-zone="Asia/Dhaka"`,
+    cloudRunAlwaysOnCommand: `gcloud run services update <SERVICE_NAME> --min-instances=1 --no-cpu-throttling --region=asia-east1`
+  });
+});
 app.get(["/manifest.json", "/site.webmanifest"], (_req, res) => {
   const p = path2.resolve(__dirname, "manifest.json");
   const fallback = path2.resolve(__dirname, "public/manifest.json");
@@ -850,11 +1337,56 @@ app.get(["/sw.js", "/service-worker.js"], (_req, res) => {
 });
 app.get("/api/live-state", (_req, res) => {
   res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  for (const tf of TIMEFRAMES) {
+    const hist = masterState.histories[tf];
+    if (hist && hist.length >= 5) {
+      const latestPeriod = hist[hist.length - 1].period;
+      const currentSig = masterState.signals[tf];
+      if (!currentSig || currentSig.targetPeriod <= latestPeriod) {
+        const fresh = buildSignal(hist, authoritativeLossStreak[tf]);
+        if (fresh) {
+          masterState.signals[tf] = fresh;
+          trackedSignals[tf] = { targetPeriod: fresh.targetPeriod, size: fresh.size };
+        }
+      }
+    }
+  }
   res.json({
     histories: masterState.histories,
     signals: masterState.signals,
     endpoints: masterState.endpoints,
     updatedAt: masterState.updatedAt,
+    serverTime: Date.now(),
+    serverSynced: true
+  });
+});
+app.post(["/api/signal/calculate", "/api/sync/trigger"], async (req, res) => {
+  const { tf } = req.body || {};
+  const targetTf = TIMEFRAMES.includes(tf) ? tf : "1M";
+  await syncTimeframeOnServer(targetTf);
+  const hist = masterState.histories[targetTf];
+  if (hist && hist.length >= 5) {
+    const newSignal = buildSignal(hist, authoritativeLossStreak[targetTf]);
+    if (newSignal) {
+      masterState.signals[targetTf] = newSignal;
+      trackedSignals[targetTf] = { targetPeriod: newSignal.targetPeriod, size: newSignal.size };
+      saveMasterStateToDisk();
+      broadcastToClients("signal-update", {
+        tf: targetTf,
+        history: hist,
+        signal: newSignal,
+        updatedAt: masterState.updatedAt[targetTf],
+        serverTime: Date.now()
+      });
+    }
+  }
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.json({
+    success: true,
+    tf: targetTf,
+    signal: masterState.signals[targetTf],
+    history: masterState.histories[targetTf],
+    updatedAt: masterState.updatedAt[targetTf],
     serverTime: Date.now(),
     serverSynced: true
   });

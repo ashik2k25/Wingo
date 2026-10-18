@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Signal, Timeframe } from '../types';
 import { Orb } from './Orb';
-import { TIMEFRAME_LABELS, sharePercent, getDisplayColorName } from '../utils/engine';
+import { TIMEFRAME_LABELS, sharePercent, getDisplayColorName, isPeriodExpired } from '../utils/engine';
 import { LiveDrawTicker } from './LiveDrawTicker';
 import { Maximize2, Minimize2, X, Zap } from 'lucide-react';
 import { playGenerateChime } from '../utils/audio';
@@ -10,6 +10,8 @@ interface FloatingOverlayProps {
   isOpen: boolean;
   signal: Signal | null;
   timeframe: Timeframe;
+  latestPeriod?: string | null;
+  serverTimeOffset?: number;
   onClose: () => void;
   onGenerate: () => void;
   onMaximize: () => void;
@@ -20,12 +22,15 @@ export const FloatingOverlay: React.FC<FloatingOverlayProps> = ({
   isOpen,
   signal,
   timeframe,
+  latestPeriod,
+  serverTimeOffset = 0,
   onClose,
   onGenerate,
   onMaximize,
   onRoundExpire,
 }) => {
   const [collapsed, setCollapsed] = useState(false);
+  const isResolving = Boolean(signal && latestPeriod && isPeriodExpired(signal.targetPeriod, latestPeriod));
 
   if (!isOpen) return null;
 
@@ -70,11 +75,17 @@ export const FloatingOverlay: React.FC<FloatingOverlayProps> = ({
           {/* Ticker & Round */}
           <div className="w-full flex items-center justify-between text-[10px] font-mono">
             <span className="text-[#91aaa0]">ROUND:</span>
-            <span className="font-bold text-[#f1c97a]">{signal?.targetPeriod || '—'}</span>
+            <span className="font-bold text-[#f1c97a]">
+              {isResolving ? 'SYNCING...' : signal?.targetPeriod || '—'}
+            </span>
           </div>
 
           <div className="w-full">
-            <LiveDrawTicker timeframe={timeframe} onRoundExpire={onRoundExpire} />
+            <LiveDrawTicker
+              timeframe={timeframe}
+              serverTimeOffset={serverTimeOffset}
+              onRoundExpire={onRoundExpire}
+            />
           </div>
 
           {/* Mini Signal Orb & Stats */}

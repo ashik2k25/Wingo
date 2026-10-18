@@ -2,14 +2,15 @@ import React, { useState } from 'react';
 import { Signal, Timeframe, SourceMode } from '../types';
 import { Orb } from './Orb';
 import { CategoryBadge } from './CategoryBadge';
-import { TIMEFRAME_LABELS, sharePercent, getColor, getDisplayColorName } from '../utils/engine';
-import { Radio, Minus, Zap, Info, AlertCircle, BarChart3, ChevronDown, ChevronUp, ShieldCheck, Sparkles } from 'lucide-react';
+import { TIMEFRAME_LABELS, sharePercent, getColor, getDisplayColorName, isPeriodExpired } from '../utils/engine';
+import { Radio, Minus, Zap, Info, AlertCircle, BarChart3, ChevronDown, ChevronUp, ShieldCheck, Sparkles, RefreshCw } from 'lucide-react';
 import { playGenerateChime } from '../utils/audio';
 
 interface SignalCardProps {
   signal: Signal | null;
   timeframe: Timeframe;
   historyLength: number;
+  latestPeriod?: string | null;
   sourceMode: SourceMode;
   isFetching: boolean;
   errorMessage?: string;
@@ -24,6 +25,7 @@ export const SignalCard: React.FC<SignalCardProps> = ({
   signal,
   timeframe,
   historyLength,
+  latestPeriod,
   sourceMode,
   isFetching,
   errorMessage,
@@ -34,8 +36,10 @@ export const SignalCard: React.FC<SignalCardProps> = ({
   onOpenShield,
 }) => {
   const [showDist, setShowDist] = useState(false);
+  const isResolving = Boolean(signal && latestPeriod && isPeriodExpired(signal.targetPeriod, latestPeriod));
 
   const getSubStatusText = () => {
+    if (isResolving) return 'RESOLVING DRAW';
     if (errorMessage && sourceMode === 'api') return 'SYNC RECONNECTING';
     if (sourceMode === 'api') return 'CLOUD LIVE SYNC';
     if (sourceMode === 'manual') return 'MANUAL DATASET';
@@ -107,9 +111,16 @@ export const SignalCard: React.FC<SignalCardProps> = ({
             <Sparkles className="w-3 h-3 text-emerald-400" />
             <span>TARGET ROUND</span>
           </span>
-          <span className="text-xs font-mono font-bold tracking-wider text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-lg border border-amber-400/20">
-            {signal?.targetPeriod || '—'}
-          </span>
+          {isResolving ? (
+            <span className="text-xs font-mono font-bold tracking-wider text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-lg border border-amber-400/20 flex items-center gap-1.5 animate-pulse">
+              <RefreshCw className="w-3 h-3 animate-spin text-amber-400" />
+              <span>SYNCING NEXT ROUND...</span>
+            </span>
+          ) : (
+            <span className="text-xs font-mono font-bold tracking-wider text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-lg border border-amber-400/20">
+              {signal?.targetPeriod || '—'}
+            </span>
+          )}
         </div>
 
         {/* Central Orb Display with Ambient Halo */}
@@ -187,6 +198,47 @@ export const SignalCard: React.FC<SignalCardProps> = ({
               <span className="text-[9px] font-bold uppercase tracking-wider font-mono text-emerald-400/90">
                 {signal.primaryBet === 'COLOR' ? 'SAFE HEDGE' : 'TREND ACTIVE'}
               </span>
+            </div>
+
+            {/* VIP Staking & Anti-Loss Circuit Breaker Bar */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="p-2.5 rounded-xl border border-white/[0.06] bg-black/30 flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                  STAKING LEVEL
+                </span>
+                <span
+                  className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-md ${
+                    signal.consecutiveLosses && signal.consecutiveLosses >= 2
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                      : signal.consecutiveLosses === 1
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}
+                >
+                  {signal.stakingLevel || 'LEVEL 1 (1X)'}
+                </span>
+              </div>
+
+              <div className="p-2.5 rounded-xl border border-white/[0.06] bg-black/30 flex items-center justify-between">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+                  CIRCUIT BREAKER
+                </span>
+                <span
+                  className={`text-[10px] font-black font-mono px-2 py-0.5 rounded-md ${
+                    signal.lossStreakPrevented
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 animate-pulse'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}
+                >
+                  {signal.consecutiveLosses && signal.consecutiveLosses >= 3
+                    ? `EMERGENCY LOCK (${signal.consecutiveLosses}/3)`
+                    : signal.consecutiveLosses && signal.consecutiveLosses >= 2
+                    ? `LOCKED (RECOVERY)`
+                    : signal.lossStreakPrevented
+                    ? 'LOCKED (LEVEL 3)'
+                    : `GUARD: ${signal.consecutiveLosses || 0}/3`}
+                </span>
+              </div>
             </div>
 
             {/* Subtle Classy Strategic Insight */}

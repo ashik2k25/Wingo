@@ -6,37 +6,41 @@ import { playTickSound } from '../utils/audio';
 
 interface LiveDrawTickerProps {
   timeframe: Timeframe;
+  serverTimeOffset?: number;
   onRoundExpire?: () => void;
 }
 
 export const LiveDrawTicker: React.FC<LiveDrawTickerProps> = ({
   timeframe,
+  serverTimeOffset = 0,
   onRoundExpire,
 }) => {
   const periodDuration = TIMEFRAME_SECONDS[timeframe] || 60;
+  const getNowSec = () => Math.floor((Date.now() + serverTimeOffset) / 1000);
+
   const [secondsRemaining, setSecondsRemaining] = useState<number>(() => {
-    const now = Math.floor(Date.now() / 1000);
+    const now = getNowSec();
     const rem = periodDuration - (now % periodDuration);
     return rem === 0 ? periodDuration : rem;
   });
 
-  const lastRoundRef = React.useRef<number>(Math.floor(Date.now() / 1000 / periodDuration));
+  const lastRoundRef = React.useRef<number>(Math.floor(getNowSec() / periodDuration));
   const onRoundExpireRef = React.useRef(onRoundExpire);
   onRoundExpireRef.current = onRoundExpire;
 
   useEffect(() => {
     const update = () => {
-      const now = Math.floor(Date.now() / 1000);
+      const now = getNowSec();
       const rem = periodDuration - (now % periodDuration);
       setSecondsRemaining(rem);
 
       const roundIndex = Math.floor(now / periodDuration);
       if (roundIndex > lastRoundRef.current) {
         lastRoundRef.current = roundIndex;
-        // Schedule sync after 2.5s to let the site publish the round result
-        setTimeout(() => {
-          onRoundExpireRef.current?.();
-        }, 2500);
+        // Schedule multi-stage syncs to receive the authoritative draw result as soon as published
+        setTimeout(() => onRoundExpireRef.current?.(), 1800);
+        setTimeout(() => onRoundExpireRef.current?.(), 3200);
+        setTimeout(() => onRoundExpireRef.current?.(), 4800);
       } else if (rem <= 5 && rem > 0) {
         playTickSound();
       }
@@ -45,7 +49,7 @@ export const LiveDrawTicker: React.FC<LiveDrawTickerProps> = ({
     update();
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
-  }, [timeframe, periodDuration]);
+  }, [timeframe, periodDuration, serverTimeOffset]);
 
   const progress = ((periodDuration - secondsRemaining) / periodDuration) * 100;
   const minutes = Math.floor(secondsRemaining / 60);
