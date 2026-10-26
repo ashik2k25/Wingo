@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ShieldCheck, ShieldAlert, Wifi, RefreshCw, X, AlertTriangle, EyeOff, Zap, CheckCircle2, ChevronRight } from 'lucide-react';
+import { ShieldCheck, X, AlertTriangle, EyeOff, Wifi, Zap, CheckCircle2 } from 'lucide-react';
 
 interface AntiDetectionModalProps {
   isOpen: boolean;
@@ -7,91 +7,60 @@ interface AntiDetectionModalProps {
 }
 
 export const AntiDetectionModal: React.FC<AntiDetectionModalProps> = ({ isOpen, onClose }) => {
-  const [baseUnit, setBaseUnit] = useState<number>(20);
-  const [currentLossStep, setCurrentLossStep] = useState<number>(0);
-  const [airplaneDone, setAirplaneDone] = useState<boolean>(false);
+  const [currentLossStep, setCurrentLossStep] = useState(0);
+  const [airplaneDone, setAirplaneDone] = useState(false);
 
   if (!isOpen) return null;
 
-  // Non-linear stealth decoy sizing calculator
-  // Prevents the casino RMS from detecting predictable linear doubling (25 -> 50 -> 100 -> 200)
-  const getStealthStake = (step: number) => {
-    switch (step) {
-      case 0:
-        return { primary: baseUnit, hedgeColor: 0, total: baseUnit, label: 'Base Recon Unit' };
-      case 1:
-        return { primary: Math.round(baseUnit * 2.1), hedgeColor: 0, total: Math.round(baseUnit * 2.1), label: 'Stealth Bump' };
-      case 2:
-        return {
-          primary: Math.round(baseUnit * 3.5),
-          hedgeColor: Math.round(baseUnit * 1.2),
-          total: Math.round(baseUnit * 4.7),
-          label: 'Split Dual Hedge (Evades Single-Size Trap)',
-        };
-      case 3:
-        return {
-          primary: Math.round(baseUnit * 6.5),
-          hedgeColor: Math.round(baseUnit * 2.5),
-          total: Math.round(baseUnit * 9.0),
-          label: 'Decoy Distribution (Break Flagging)',
-        };
-      case 4:
-        return {
-          primary: 0,
-          hedgeColor: 0,
-          total: 0,
-          label: '🛑 GHOST MODE (MANDATORY SKIP ROUND)',
-        };
-      default:
-        return {
-          primary: 0,
-          hedgeColor: 0,
-          total: 0,
-          label: '🛑 GHOST MODE (MANDATORY SKIP ROUND)',
-        };
-    }
-  };
+  // Non-linear decoy staking schedule
+  const decoySchedule = [
+    { step: 0, label: 'Base Recon Stake', primary: 25, hedgeColor: 0, total: 25 },
+    { step: 1, label: 'Dual-Shield Recovery (1.8x)', primary: 35, hedgeColor: 15, total: 50 },
+    { step: 2, label: 'Asymmetric Decoy (2.4x)', primary: 75, hedgeColor: 45, total: 120 },
+    { step: 3, label: 'Terminal Defense Lock (3.1x)', primary: 160, hedgeColor: 90, total: 250 },
+    { step: 4, label: '🛑 CIRCUIT BREAKER HALT', primary: 0, hedgeColor: 0, total: 0 },
+  ];
 
-  const currentStake = getStealthStake(currentLossStep);
+  const currentStake = decoySchedule[currentLossStep] || decoySchedule[0];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-3xl border border-[#21483c] bg-[#08221c] p-5 sm:p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div className="w-full max-w-lg rounded-3xl liquid-glass border border-emerald-500/30 p-5 sm:p-6 text-slate-100 shadow-2xl relative max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-[#21483c]">
+        <div className="flex items-center justify-between pb-4 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-2xl bg-[#25c98e]/20 border border-[#25c98e]/40 flex items-center justify-center text-[#25c98e]">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400">
               <ShieldCheck className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-base font-extrabold tracking-tight text-[#e9fff4] flex items-center gap-2">
-                <span>Stealth Anti-Detection Shield</span>
-                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-[#25c98e] text-[#04221a]">
+              <h3 className="text-base font-extrabold tracking-tight text-white flex items-center gap-2">
+                <span>Stealth Anti-Detection Protocol</span>
+                <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-400 text-slate-950 font-mono">
                   ACTIVE
                 </span>
               </h3>
-              <p className="text-[11px] text-[#91aaa0]">সাইটের অ্যালগরিদম ট্র্যাকিং ও ফাঁদ এড়ানোর গাইড</p>
+              <p className="text-[11px] text-slate-400">Platform RMS Countermeasures & Session Disconnect Guide</p>
             </div>
           </div>
 
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-xl bg-[#0e3027] border border-[#21483c] flex items-center justify-center text-[#91aaa0] hover:text-[#e9fff4] transition-colors"
+            className="w-8 h-8 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        {/* Core Truth Notice */}
-        <div className="mt-4 p-3.5 rounded-2xl bg-[#f59e0b]/10 border border-[#f59e0b]/30 text-[#f59e0b]">
+        {/* Core Intelligence Notice */}
+        <div className="mt-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
           <div className="flex items-start gap-2.5">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-[#f59e0b]" />
+            <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-400" />
             <div className="text-xs leading-relaxed">
-              <span className="font-extrabold block text-sm mb-1 text-[#f1c97a]">
-                💡 ক্যাসিনো সাইট কীভাবে প্লেয়ারকে "Mark / Target" করে?
+              <span className="font-extrabold block text-sm mb-1 text-amber-200">
+                How Platform RMS Systems Track Predictable Betting Patterns
               </span>
-              <p className="text-[#e9fff4]/90 text-[11px]">
-                আপনার পর্যবেক্ষণ <b>শতভাগ বাস্তবসম্মত</b>। DX WIN বা WinGo সাইটগুলো সেন্ট্রাল <b>RMS (Risk Management System)</b> ব্যবহার করে। যখন কোনো প্লেয়ার বড় উইন পায় (যেমন +৳১,৯৬০ বা +৳৩,২৩৪) এবং সাথে সাথে লিনিয়ার দ্বিগুণ বেট (৳২৫ ➔ ৳৫১ ➔ ৳১০২ ➔ ৳২০৫) চালায়, সাইটের সিস্টেম তখন ওই প্লেয়ারকে অ্যালগরিদমিক ট্র্যাপে ফেলে। নিচে দেওয়া ৩টি কৌশল মেনে চললে সাইট আপনাকে কখনোই টার্গেট করতে পারবে না:
+              <p className="text-slate-200 text-[11px]">
+                Gaming servers employ automated <b>Risk Management Systems (RMS)</b> that monitor linear martingale doubling (e.g. 1X ➔ 2X ➔ 4X ➔ 8X). Adhering to the following three protocols completely neutralizes tracking signatures.
               </p>
             </div>
           </div>
@@ -100,93 +69,93 @@ export const AntiDetectionModal: React.FC<AntiDetectionModalProps> = ({ isOpen, 
         {/* 3 Golden Stealth Rules */}
         <div className="mt-4 space-y-3">
           {/* Rule 1: Ghost Mode (Skip Rounds) */}
-          <div className="p-4 rounded-2xl bg-[#0c2822] border border-[#21483c]">
-            <div className="flex items-center gap-2.5 text-[#25c98e] mb-1.5">
+          <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-2.5 text-emerald-400 mb-1.5">
               <EyeOff className="w-4 h-4" />
-              <h4 className="text-xs font-black uppercase tracking-wider">
-                ১. ঘোস্ট মোড (উইনের পর ১-২ রাউন্ড স্কিপ করা)
+              <h4 className="text-xs font-black uppercase tracking-wider font-mono">
+                1. Ghost Protocol (Standby Observation)
               </h4>
             </div>
-            <p className="text-xs text-[#91aaa0] leading-relaxed">
-              বড় কোনো প্রফিট পাওয়ার পর বা টানা ২টি লস হলে <b>পরবর্তী ১টি বা ২টি রাউন্ডে ০ টাকা বেট করুন (শুধু পেপার বেট বা পর্যবেক্ষণ)</b>। যখন টেবিলে আপনার কোনো টাকা থাকে না, সাইটের রিস্ক অ্যালগরিদম আপনাকে আর টার্গেট করতে পারে না এবং সেশন ট্র্যাপ রিসেট হয়ে যায়।
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Following a major profit hit or 2 consecutive draw evaluations, <b>stand aside for 1-2 rounds with 0 active stake</b>. Without capital on the table, automated RMS heuristics detach and internal session tracking resets to neutral.
             </p>
           </div>
 
           {/* Rule 2: IP & Session Reset (Airplane Mode) */}
-          <div className="p-4 rounded-2xl bg-[#0c2822] border border-[#21483c]">
+          <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10">
             <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2.5 text-[#25c98e]">
+              <div className="flex items-center gap-2.5 text-emerald-400">
                 <Wifi className="w-4 h-4" />
-                <h4 className="text-xs font-black uppercase tracking-wider">
-                  ২. আইপি ও ডিভাইস সেশন ক্লকিং (IP Reset)
+                <h4 className="text-xs font-black uppercase tracking-wider font-mono">
+                  2. Network Session Reset (IP Renewal)
                 </h4>
               </div>
               <button
                 onClick={() => setAirplaneDone(!airplaneDone)}
-                className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all ${
+                className={`text-[10px] font-bold px-2 py-0.5 rounded-lg border transition-all cursor-pointer ${
                   airplaneDone
-                    ? 'bg-[#25c98e]/20 border-[#25c98e] text-[#25c98e]'
-                    : 'bg-[#14362e] border-[#21483c] text-[#91aaa0]'
+                    ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                    : 'bg-white/5 border-white/10 text-slate-400'
                 }`}
               >
-                {airplaneDone ? '✓ আইপি রিসেট সম্পন্ন' : 'রিসেট চিহ্নিত করুন'}
+                {airplaneDone ? '✓ IP Renewed' : 'Mark IP Reset'}
               </button>
             </div>
-            <p className="text-xs text-[#91aaa0] leading-relaxed">
-              ক্যাসিনো সাইট আপনার মোবাইল আইপি (IP address) ও ব্রাউজার সেশন ট্র্যাক করে। যখনই দেখবেন উল্টো ড্র আসছে, মোবাইলের <b>এয়ারপ্লেন মোড (Flight Mode) ১০ সেকেন্ড অন করে অফ করুন</b>। এতে মোবাইল নেটওয়ার্কের নতুন CGNAT IP অ্যাসাইন হবে এবং সাইটের ট্র্যাকিং সম্পূর্ণ বিচ্ছিন্ন হয়ে যাবে।
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Gaming providers link session cookies with your public IP address. Toggling <b>Airplane Mode for 10 seconds</b> on your mobile device forces carrier CGNAT IP reassignment, completely disconnecting persistent telemetry footprints.
             </p>
           </div>
 
           {/* Rule 3: Anti-Martingale Decoy Calculator */}
-          <div className="p-4 rounded-2xl bg-[#0c2822] border border-[#21483c]">
-            <div className="flex items-center gap-2.5 text-[#25c98e] mb-2">
+          <div className="p-4 rounded-2xl bg-white/[0.03] border border-white/10">
+            <div className="flex items-center gap-2.5 text-emerald-400 mb-2">
               <Zap className="w-4 h-4" />
-              <h4 className="text-xs font-black uppercase tracking-wider">
-                ৩. স্টেলথ বেটিং ক্যালকুলেটর (ডিকয় মানি ম্যানেজমেন্ট)
+              <h4 className="text-xs font-black uppercase tracking-wider font-mono">
+                3. Decoy Staking Protocol (Non-Linear Capital Preservation)
               </h4>
             </div>
-            <p className="text-xs text-[#91aaa0] mb-3">
-              অন্ধভাবে দ্বিগুণ (২৫ ➔ ৫১ ➔ ১০২ ➔ ২০৫ ➔ ৪১০ ➔ ৮২০) করলে সাইটের বট তাৎক্ষণিক ধরে ফেলে। নিচের ডিকয় মডেল অনুসরণ করুন:
+            <p className="text-xs text-slate-400 mb-3">
+              Avoid naive linear progression. Employ non-linear asymmetric decoy sizing with Dual-Shield coverage:
             </p>
 
             {/* Interactive Step Selector */}
-            <div className="flex items-center justify-between gap-1.5 mb-3 bg-[#061b17] p-1.5 rounded-xl border border-[#21483c]">
+            <div className="flex items-center justify-between gap-1.5 mb-3 bg-black/40 p-1.5 rounded-xl border border-white/10">
               {[0, 1, 2, 3, 4].map((step) => (
                 <button
                   key={step}
                   onClick={() => setCurrentLossStep(step)}
-                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold font-mono transition-all ${
+                  className={`flex-1 py-1.5 rounded-lg text-[10px] font-bold font-mono transition-all cursor-pointer ${
                     currentLossStep === step
-                      ? 'bg-[#25c98e] text-[#04221a] shadow-sm'
-                      : 'text-[#91aaa0] hover:text-[#e9fff4]'
+                      ? 'bg-emerald-400 text-slate-950 shadow-sm'
+                      : 'text-slate-400 hover:text-white'
                   }`}
                 >
-                  {step === 0 ? 'বেস' : step === 4 ? '🛑 স্কিপ' : `স্টেপ ${step}`}
+                  {step === 0 ? 'Base' : step === 4 ? '🛑 Halt' : `Step ${step}`}
                 </button>
               ))}
             </div>
 
             {/* Current Step Recommendation */}
-            <div className="p-3 rounded-xl bg-[#061b17] border border-[#21483c]/80 flex flex-col gap-1.5">
+            <div className="p-3 rounded-xl bg-black/40 border border-white/10 flex flex-col gap-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#f1c97a]">
-                  পদ্ধতি: {currentStake.label}
+                <span className="text-[11px] font-bold text-amber-300 font-mono">
+                  Method: {currentStake.label}
                 </span>
-                <span className="text-xs font-mono font-black text-[#25c98e]">
-                  মোট: ৳{currentStake.total}
+                <span className="text-xs font-mono font-black text-emerald-400">
+                  Total: {currentStake.total} units
                 </span>
               </div>
               {currentLossStep === 4 ? (
-                <p className="text-[11px] text-[#ef6269] font-bold">
-                  🛑 এই রাউন্ডে ১ টাকাও বেট করবেন না! সেশন ব্রেক দিতে ১ রাউন্ড স্কিপ করুন।
+                <p className="text-[11px] text-rose-400 font-bold font-mono">
+                  🛑 Circuit breaker engaged. Stand aside for this round.
                 </p>
               ) : currentStake.hedgeColor > 0 ? (
-                <p className="text-[11px] text-[#91aaa0]">
-                  👉 সাইজ বেট: <b>৳{currentStake.primary}</b> + কালার হেজ (Red/Green): <b>৳{currentStake.hedgeColor}</b>
+                <p className="text-[11px] text-slate-300 font-mono">
+                  Primary Size: <b>{currentStake.primary} units</b> + Color Hedge: <b>{currentStake.hedgeColor} units</b>
                 </p>
               ) : (
-                <p className="text-[11px] text-[#91aaa0]">
-                  👉 একক বেট: <b>৳{currentStake.primary}</b> (নন-লিনিয়ার ডিকয় অ্যামাউন্ট)
+                <p className="text-[11px] text-slate-300 font-mono">
+                  Single Leg: <b>{currentStake.primary} units</b> (Non-linear base entry)
                 </p>
               )}
             </div>
@@ -194,18 +163,18 @@ export const AntiDetectionModal: React.FC<AntiDetectionModalProps> = ({ isOpen, 
         </div>
 
         {/* Engineering Realism Confirmation */}
-        <div className="mt-4 p-3.5 rounded-2xl bg-[#12342b] border border-[#25c98e]/30 flex items-center justify-between">
+        <div className="mt-4 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-[#25c98e]" />
-            <span className="text-xs font-bold text-[#e9fff4]">
-              প্রতিরক্ষা সক্রিয়: সাইটের ট্র্যাকিং এড়াতে প্রস্তুত
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span className="text-xs font-bold text-white">
+              Defense Protocol Active: Countermeasures engaged
             </span>
           </div>
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-[#25c98e] text-[#04221a] text-xs font-black hover:bg-[#1eb57d] transition-colors"
+            className="px-4 py-1.5 rounded-xl bg-emerald-400 text-slate-950 text-xs font-black hover:bg-emerald-300 transition-colors cursor-pointer"
           >
-            বুঝেছি
+            Dismiss
           </button>
         </div>
       </div>

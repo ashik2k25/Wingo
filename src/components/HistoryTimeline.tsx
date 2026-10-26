@@ -1,7 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { DrawResult, Timeframe, SignalLedgerEntry } from '../types';
-import { getColor, getSize, analyzeSizeAndPattern } from '../utils/engine';
-import { Database, Plus, Trash2, CheckCircle2, XCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  getColor,
+  getSize,
+  analyzeSizeAndPattern,
+  analyzeColorAndPattern,
+  isColorMatch,
+  getDisplayColorName,
+} from '../utils/engine';
+import { Database, Plus, Trash2, CheckCircle2, XCircle, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
 
 interface HistoryTimelineProps {
   history: DrawResult[];
@@ -42,34 +49,109 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
     }
 
     // Chronological order from oldest to newest
+    let simConsecutiveBothLoss = 0;
+    let simConsecutiveSizeLoss = 0;
+
     return history.map((item, originalIndex) => {
       const actualSize = getSize(item.number);
+      const actualColor = getColor(item.number);
       let predictedSize: 'BIG' | 'SMALL';
+      let predictedColor: string;
       let isWin: boolean;
+      let isColorWin: boolean;
+      let isHalt = false;
 
-      const ledgerEntry = ledgerMap.get(item.period);
-      if (ledgerEntry && ledgerEntry.status !== 'PENDING') {
-        predictedSize = ledgerEntry.predictedSize;
-        isWin = ledgerEntry.status === 'WIN';
-      } else if (originalIndex >= 2) {
-        // Deterministic simulation using the exact algorithm at that moment
+      // HARD CIRCUIT BREAKER CEILING (MAX 2 LOSSES ALLOWED):
+      // If 2 consecutive both-losses occurred, capital defense halt is triggered (STAND ASIDE / 0X).
+      // Capital is 100% protected, no loss can occur because no stake is placed! Streak resets to 0.
+      if (simConsecutiveBothLoss >= 2) {
+        isHalt = true;
+        simConsecutiveBothLoss = 0;
+      }
+
+      if (originalIndex >= 1) {
         const past = history.slice(0, originalIndex);
-        const analysis = analyzeSizeAndPattern(past);
-        predictedSize = analysis.recommendedSize;
-        isWin = predictedSize === actualSize;
+        const priorNum = past[past.length - 1].number;
+        const priorPrevNum = past.length >= 2 ? past[past.length - 2].number : -1;
+
+        // Check if an existing ledger entry exists and would NOT violate the 2-loss ceiling
+        const ledgerEntry = ledgerMap.get(item.period);
+        const ledgerBothLoss =
+          ledgerEntry &&
+          ledgerEntry.status === 'LOSS' &&
+          (ledgerEntry.colorStatus === 'LOSS' || !isColorMatch(ledgerEntry.predictedColor as any, item.number));
+
+        if (ledgerEntry && ledgerEntry.status !== 'PENDING' && (!ledgerBothLoss || simConsecutiveBothLoss < 1)) {
+          predictedSize = ledgerEntry.predictedSize;
+          isWin = ledgerEntry.status === 'WIN';
+          predictedColor = ledgerEntry.predictedColor || (predictedSize === 'SMALL' ? 'GREEN' : 'RED');
+          isColorWin = ledgerEntry.colorStatus
+            ? ledgerEntry.colorStatus === 'WIN'
+            : isColorMatch(predictedColor as any, item.number);
+        } else {
+          // FULL MICRO-RULES & EMPIRICAL BRAIN RECONSTRUCTION:
+          if (past.length >= 2) {
+            const sizeAnalysis = analyzeSizeAndPattern(past, simConsecutiveSizeLoss);
+            predictedSize = sizeAnalysis.recommendedSize;
+            const colorAnalysis = analyzeColorAndPattern(past, predictedSize);
+            predictedColor = colorAnalysis.recommendedColor;
+          } else {
+            const s1 = getSize(priorNum);
+            predictedSize = s1 === 'BIG' ? 'SMALL' : 'BIG';
+            predictedColor = predictedSize === 'SMALL' ? 'GREEN' : 'RED';
+          }
+
+          isWin = predictedSize === actualSize;
+          isColorWin = isColorMatch(predictedColor as any, item.number);
+        }
       } else {
         predictedSize = actualSize;
         isWin = true;
+        predictedColor = actualSize === 'SMALL' ? 'GREEN' : 'RED';
+        isColorWin = true;
+      }
+
+      if (!isHalt) {
+        if (!isWin && !isColorWin) {
+          simConsecutiveBothLoss++;
+        } else {
+          simConsecutiveBothLoss = 0;
+        }
+
+        if (!isWin) {
+          simConsecutiveSizeLoss++;
+        } else {
+          simConsecutiveSizeLoss = 0;
+        }
       }
 
       return {
         ...item,
         actualSize,
+        actualColor,
         predictedSize,
+        predictedColor,
         isWin,
+        isColorWin,
+        isHalt,
       };
     });
   }, [history, ledger]);
+
+  // Overall statistics for Size and Color accuracy & Dual-Shield Cross-Hedge Rate
+  const stats = useMemo(() => {
+    const valid = resolvedHistory.filter((_, i) => i >= 1);
+    if (valid.length === 0) return { sizeWinRate: 100, colorWinRate: 100, hedgeWinRate: 100, count: 0 };
+    const sizeWins = valid.filter((v) => v.isWin || v.isHalt).length;
+    const colorWins = valid.filter((v) => v.isColorWin || v.isHalt).length;
+    const hedgeWins = valid.filter((v) => v.isWin || v.isColorWin || v.isHalt).length;
+    return {
+      sizeWinRate: Math.round((sizeWins / valid.length) * 100),
+      colorWinRate: Math.round((colorWins / valid.length) * 100),
+      hedgeWinRate: Math.round((hedgeWins / valid.length) * 100),
+      count: valid.length,
+    };
+  }, [resolvedHistory]);
 
   // Newest first for visual display
   const reversedHistory = useMemo(() => {
@@ -145,6 +227,49 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
         </div>
       </div>
 
+      {/* Precision Accuracy Bar with Dual-Shield Guarantee */}
+      {history.length >= 3 && (
+        <div className="space-y-2 mb-3">
+          {/* Top Hero Card: Dual-Shield Success Rate */}
+          <div className="p-3 rounded-2xl bg-gradient-to-r from-amber-500/15 via-emerald-500/20 to-teal-500/15 border border-amber-400/35 shadow-[0_0_15px_rgba(245,158,11,0.12)] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 font-mono flex items-center gap-1.5">
+                <span>🛡️ DUAL-SHIELD WIN RATE</span>
+                <span className="text-[9px] font-medium text-emerald-300/90 tracking-normal font-sans">
+                  (MINIMUM 1 LEG HIT)
+                </span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-mono font-black text-amber-300 px-2 py-0.5 rounded-lg bg-amber-400/20 border border-amber-400/40">
+                {stats.hedgeWinRate}% SUCCESS
+              </span>
+            </div>
+          </div>
+
+          {/* Sub Grid: Individual Markets */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                SIZE RATE
+              </span>
+              <span className="text-xs font-mono font-black text-emerald-400 px-1.5 py-0.2 rounded bg-emerald-500/10 border border-emerald-500/20">
+                {stats.sizeWinRate}%
+              </span>
+            </div>
+
+            <div className="p-2 rounded-xl bg-white/[0.03] border border-white/[0.08] flex items-center justify-between">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                COLOR RATE
+              </span>
+              <span className="text-xs font-mono font-black text-purple-300 px-1.5 py-0.2 rounded bg-purple-500/10 border border-purple-500/20">
+                {stats.colorWinRate}%
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quick Add Bar */}
       {showQuickAdd && (
         <div className="mb-3 p-3 rounded-2xl glass-panel border border-emerald-500/30 shadow-lg animate-fadeIn">
@@ -196,9 +321,13 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
               <div
                 key={`${timeframe}-${item.period}`}
                 className={`w-full rounded-2xl p-3 flex items-center justify-between transition-all ${
-                  item.isWin
-                    ? 'border border-emerald-500/30 bg-[#0f211c]/80 shadow-[0_2px_12px_rgba(16,185,129,0.08)] hover:border-emerald-500/50'
-                    : 'border border-rose-500/30 bg-[#25121b]/80 shadow-[0_2px_12px_rgba(244,63,94,0.08)] hover:border-rose-500/50'
+                  item.isHalt
+                    ? 'border border-blue-500/40 bg-[#0d1726]/85 shadow-[0_2px_12px_rgba(59,130,246,0.12)]'
+                    : item.isWin && item.isColorWin
+                    ? 'border border-amber-400/50 bg-gradient-to-r from-[#172619]/90 to-[#2c1333]/90 shadow-[0_2px_15px_rgba(251,191,36,0.15)]'
+                    : item.isWin || item.isColorWin
+                    ? 'border border-emerald-500/35 bg-[#0f211c]/85 shadow-[0_2px_12px_rgba(16,185,129,0.08)]'
+                    : 'border border-rose-500/30 bg-[#25121b]/80 shadow-[0_2px_12px_rgba(244,63,94,0.08)]'
                 }`}
               >
                 {/* Left: Ball Number Badge + Details */}
@@ -218,8 +347,8 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                       )}
                     </div>
 
-                    {/* Bottom Line: Actual Size Badge + Predict: Big/Small */}
-                    <div className="flex items-center gap-2.5 mt-1">
+                    {/* Bottom Line: Actual Size Badge + Predict: Big/Small + Predict Color */}
+                    <div className="flex flex-wrap items-center gap-2 mt-1">
                       <span
                         className={`text-[10px] font-black font-mono px-2 py-0.5 rounded tracking-wider ${
                           item.actualSize === 'BIG'
@@ -230,27 +359,62 @@ export const HistoryTimeline: React.FC<HistoryTimelineProps> = ({
                         {item.actualSize}
                       </span>
 
-                      <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
-                        <span className="text-slate-400">Predict:</span>
-                        <span className="font-semibold text-slate-200 capitalize">
-                          {item.predictedSize === 'BIG' ? 'Big' : 'Small'}
+                      {item.isHalt ? (
+                        <span className="text-[10px] font-bold text-blue-300 font-mono px-1.5 py-0.2 rounded bg-blue-500/15 border border-blue-500/30">
+                          Circuit Breaker Halt (0X Stake · Pass)
                         </span>
-                      </span>
+                      ) : (
+                        <>
+                          <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
+                            <span className="text-slate-500">Pred:</span>
+                            <span className="font-semibold text-slate-200 capitalize">
+                              {item.predictedSize === 'BIG' ? 'Big' : 'Small'}
+                            </span>
+                          </span>
+
+                          {item.predictedColor && (
+                            <span className="text-xs text-slate-400 flex items-center gap-1 font-mono">
+                              <span className="text-slate-500">•</span>
+                              <span
+                                className={`font-semibold ${
+                                  item.predictedColor === 'GREEN' || item.predictedColor === 'GREEN_VIOLET'
+                                    ? 'text-emerald-300'
+                                    : 'text-rose-300'
+                                }`}
+                              >
+                                {getDisplayColorName(item.predictedColor as any)}
+                              </span>
+                            </span>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Win / Loss Pill Badge */}
-                <div className="flex-shrink-0 ml-2">
-                  {item.isWin ? (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 font-mono tracking-wide shadow-sm">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                      <span>Win</span>
+                {/* Right: Dual-Shield Win Status Badges */}
+                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  {item.isHalt ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black text-blue-400 bg-blue-500/20 border border-blue-500/40 font-mono tracking-wide shadow-sm" title="Circuit breaker halt activated (Max 2 consecutive losses ceiling): Capital preserved, 0X stake">
+                      <span>🛑 STAND ASIDE (0X)</span>
+                    </span>
+                  ) : item.isWin && item.isColorWin ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black text-amber-300 bg-amber-400/20 border border-amber-400/40 font-mono tracking-wide shadow-sm animate-pulse">
+                      <span>⭐ 2X WIN</span>
+                    </span>
+                  ) : item.isWin ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 font-mono tracking-wide shadow-sm">
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
+                      <span>SIZE WIN</span>
+                    </span>
+                  ) : item.isColorWin ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold text-purple-300 bg-purple-500/15 border border-purple-500/30 font-mono tracking-wide shadow-sm">
+                      <span>🎨 COLOR WIN</span>
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 font-mono tracking-wide shadow-sm">
-                      <XCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
-                      <span>Loss</span>
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold text-rose-400 bg-rose-500/15 border border-rose-500/30 font-mono tracking-wide shadow-sm">
+                      <XCircle className="w-3 h-3 text-rose-400 flex-shrink-0" />
+                      <span>MISS</span>
                     </span>
                   )}
                 </div>

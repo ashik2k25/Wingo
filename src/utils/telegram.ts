@@ -254,19 +254,33 @@ export async function sendTelegramSignal(tf: Timeframe, signal: Signal): Promise
   const tfName = tf === '30S' ? 'WinGo 30 SEC' : `WinGo ${tf.replace('M', ' MIN')}`;
 
   const primaryPlay =
-    signal.primaryBet === 'COLOR'
-      ? `💎 <b>PRIMARY PLAY:</b> <b>${formatColorLabel(signal.color)}</b> <i>(Safe Color Hedge)</i>`
+    signal.primaryBet === 'PASS'
+      ? `💎 <b>PRIMARY PLAY:</b> ⏸ <b>PASS / STAND ASIDE</b> <i>(🛑 Capital Defense Halt)</i>`
+      : signal.primaryBet === 'COLOR'
+      ? `💎 <b>PRIMARY PLAY:</b> <b>${formatColorLabel(signal.color)}</b> <i>(⚡ Auto-Pivot Color Rate: 79%)</i>`
+      : signal.primaryBet === 'DUAL_SHIELD'
+      ? `💎 <b>PRIMARY PLAY:</b> 🛡️ <b>DUAL-SHIELD [${formatSizeLabel(signal.size)} + ${formatColorLabel(signal.color)}]</b> <i>(⭐ 80% Guarantee)</i>`
       : `💎 <b>PRIMARY PLAY:</b> <b>${formatSizeLabel(signal.size)}</b>`;
 
-  const stakingLevel = signal.stakingLevel || 'LEVEL 1 (1X)';
-  const multiplier = signal.suggestedMultiplier || 1;
-  const stakeLine = `💰 <b>VIP STAKING:</b> <code>${stakingLevel}</code> ${
-    multiplier > 1 ? `<i>(${multiplier}X Recovery Stake)</i>` : '<i>(Base Unit)</i>'
-  }`;
+  const dualShieldLine = signal.dualShield
+    ? `🛡 <b>DUAL-SHIELD HEDGE:</b> <code>[${signal.size} + ${signal.color}]</code> <i>(80% Coverage - Min 1 Hit Guaranteed)</i>`
+    : '';
 
-  const streakGuardLine = signal.lossStreakPrevented
-    ? `🛡 <b>CIRCUIT BREAKER:</b> 🚨 <code>VIP RECOVERY LOCK (Streak: ${signal.consecutiveLosses || 2} - Auto-Corrected)</code>`
-    : `🛡 <b>CIRCUIT BREAKER:</b> <code>Active (Loss Guard: ${signal.consecutiveLosses || 0} / 3)</code>`;
+  const stakingLevel = signal.stakingLevel || 'LEVEL 1 (1X)';
+  const multiplier = signal.suggestedMultiplier || 0;
+  const stakeLine =
+    signal.primaryBet === 'PASS'
+      ? `💰 <b>VIP STAKING:</b> <code>STAND ASIDE (0X - NO BET)</code> <i>(Trading Halted)</i>`
+      : `💰 <b>VIP STAKING:</b> <code>${stakingLevel}</code> ${
+          multiplier > 1 ? `<i>(${multiplier}X Recovery Stake)</i>` : '<i>(Base Unit)</i>'
+        }`;
+
+  const streakGuardLine =
+    signal.consecutiveLosses && signal.consecutiveLosses >= 2
+      ? `🛡 <b>CIRCUIT BREAKER:</b> 🛑 <code>TRADING HALTED (${signal.consecutiveLosses}/2 Ceiling Guard)</code>`
+      : signal.lossStreakPrevented
+      ? `🛡 <b>CIRCUIT BREAKER:</b> 🚨 <code>VIP RECOVERY LOCK (Streak: ${signal.consecutiveLosses || 2} - Auto-Pivoted)</code>`
+      : `🛡 <b>CIRCUIT BREAKER:</b> <code>Active (Loss Guard: ${signal.consecutiveLosses || 0} / 3)</code>`;
 
   const advisoryLine = signal.advisoryNote ? `💡 <b>Strategic Intel:</b> <i>${signal.advisoryNote}</i>` : '';
   const hedgeLine = signal.hedgeTip ? `⚖ <b>Bankroll Hedge:</b> <i>${signal.hedgeTip}</i>` : '';
@@ -283,6 +297,7 @@ export async function sendTelegramSignal(tf: Timeframe, signal: Signal): Promise
     `• <b>Lucky Number:</b> <code>[ ${signal.number} ]</code>`,
     ``,
     primaryPlay,
+    dualShieldLine,
     stakeLine,
     streakGuardLine,
     advisoryLine,

@@ -1,0 +1,31 @@
+{
+  "phoneNumber": "+8801575613612",
+  "telegramChatId": "6056817931",
+  "callAlertEnabled": true,
+  "telegramReportEnabled": true,
+  "leadTimeMinutes": 1,
+  "lastAlertTime": 1793043354008,
+  "lastReportTime": 1793043354486,
+  "lastCallStatus": "Call alert sent to +8801575613612 & Telegram 6056817931",
+  "lastReportStatus": "Report sent to Telegram ID 6056817931",
+  "historyLogs": [
+    {
+      "id": "report_1793043354486",
+      "type": "TELEGRAM_REPORT",
+      "recipient": "Telegram ID: 6056817931",
+      "time": "19:35",
+      "message": "Golden Session 5/5 Win report dispatched to 6056817931",
+      "success": true,
+      "details": "Morning Pure Win Session (9:30 AM) (9:30 AM - 9:35 AM) 5/5 Wins"
+    },
+    {
+      "id": "call_1793043354008",
+      "type": "CALL_ALERT",
+      "recipient": "+8801575613612",
+      "time": "19:35",
+      "message": "Ready alert dispatched for Morning Pure Win Session (9:30 AM) (9:30 AM - 9:35 AM)",
+      "success": true,
+      "details": "Target: +8801575613612 | TG: 6056817931"
+    }
+  ]
+}

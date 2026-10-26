@@ -54,7 +54,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                 </span>
               </h3>
               <p className="text-[11px] text-[#91aaa0]">
-                Android APK ডাউনলোড ও ইনস্টল গাইড
+                Android APK Download & Installation Guide
               </p>
             </div>
           </div>
@@ -74,19 +74,19 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-extrabold text-[#25c98e] uppercase tracking-wider flex items-center gap-1.5">
                 <Download className="w-3.5 h-3.5" />
-                <span>PWABuilder .APK ফাইল ডাউনলোড</span>
+                <span>PWABuilder .APK Package Generator</span>
               </span>
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#25c98e]/20 text-[#25c98e] font-bold">
                 100% Validated
               </span>
             </div>
             <p className="text-[11px] text-[#e9fff4] leading-relaxed">
-              Manifest description ও আইকন ১০০% ফিক্স করা হয়েছে। সরাসরি ইনস্টলযোগ্য <strong className="text-[#25c98e]">.apk</strong> ফাইল পেতে:
+              Manifest description and icons are fully verified. To generate an installable <strong className="text-[#25c98e]">.apk</strong> package:
             </p>
             <ol className="list-decimal list-inside space-y-1 text-[11px] text-[#91aaa0]">
-              <li>নিচের বক্স থেকে <strong className="text-[#e9fff4]">Copy</strong> বাটনে চাপ দিয়ে লিংকটি কপি করুন।</li>
-              <li><strong className="text-[#e9fff4]">pwabuilder.com</strong> সাইটে গিয়ে লিংকটি পেস্ট করে Start দিন।</li>
-              <li><strong className="text-[#e9fff4]">Android</strong> কার্ডে চাপ দিয়ে <strong>Download Package (.apk)</strong> সংগ্রহ করুন।</li>
+              <li>Click <strong className="text-[#e9fff4]">Copy</strong> below to copy the verified application URL.</li>
+              <li>Navigate to <strong className="text-[#e9fff4]">pwabuilder.com</strong>, paste the link, and click Start.</li>
+              <li>Select <strong className="text-[#e9fff4]">Android</strong> and click <strong>Download Package (.apk)</strong>.</li>
             </ol>
             <a
               href="https://www.pwabuilder.com"
@@ -102,7 +102,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
           {/* Copy Direct App Link */}
           <div className="p-3 rounded-2xl bg-[#061b17] border border-[#21483c] space-y-1.5">
             <span className="text-[10px] font-bold text-[#91aaa0] uppercase tracking-wider block">
-              Direct App URL (PWABuilder এ পেস্ট করার জন্য):
+              Direct App URL (Paste into PWABuilder):
             </span>
             <div className="flex items-center gap-2">
               <input
@@ -126,11 +126,11 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
             <div className="flex items-center gap-2 mb-1.5 text-[#f1c97a]">
               <Smartphone className="w-4 h-4" />
               <span className="text-xs font-bold uppercase tracking-wider">
-                ফোনে ১-ক্লিকে ইনস্টল (PWA APK Mode):
+                1-Click Direct Phone Install (PWA Mode):
               </span>
             </div>
             <p className="text-[11px] text-[#91aaa0] leading-relaxed">
-              সরাসরি ক্রোম ব্রাউজারের ৩ ডট মেনু (<strong className="text-[#e9fff4]">⋮</strong>) চাপুন &gt; <strong className="text-[#25c98e]">"Install app"</strong> অথবা <strong className="text-[#25c98e]">"Add to Home screen"</strong> চাপলে নতুন আইকনসহ ফুলস্ক্রিন অ্যাপ হিসেবে ফোনে ইনস্টল হয়ে যাবে।
+              Open Chrome menu (<strong className="text-[#e9fff4]">⋮</strong>) &gt; tap <strong className="text-[#25c98e]">"Install app"</strong> or <strong className="text-[#25c98e]">"Add to Home screen"</strong> to install the application as a standalone native-grade app with custom icon.
             </p>
             {deferredPrompt && (
               <button

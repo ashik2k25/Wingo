@@ -358,7 +358,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  গুগল ক্লাউড রানে কোনো রিকোয়েস্ট না থাকলে কন্টেইনার স্লিপ মোডে চলে যায়। <strong>Google Cloud Scheduler</strong> বা যেকোনো ওয়েব ক্রন দিয়ে নিচের এন্ডপয়েন্টে প্রতি ১ মিনিটে পিং পাঠালে সার্ভার ২৪ ঘণ্টা সজাগ থাকবে এবং আপনার কম্পিউটার/মোবাইল অফলাইন থাকলেও টেলিগ্রামে একটানা সিগন্যাল যেতে থাকবে।
+                  Google Cloud Run instances scale to zero when idle. Pinging the keepalive endpoint every 1 minute via <strong>Google Cloud Scheduler</strong> or an external web cron ensures continuous 24/7 background operation, dispatching automated Telegram signals even when your local devices are offline.
                 </p>
               </div>
 
@@ -422,7 +422,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-slate-400">
-                  Google Cloud Shell বা টার্মিনালে নিচের কমান্ডটি একবার পেস্ট করে এন্টার দিন। প্রতি ১ মিনিট পরপর ক্রন স্বয়ংক্রিয়ভাবে জব এক্সিকিউট করবে:
+                  Paste this command once into Google Cloud Shell or your gcloud terminal. Cloud Scheduler will trigger the keepalive ping every 1 minute:
                 </p>
 
                 <pre className="p-3 rounded-xl bg-black/60 border border-white/10 text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre leading-relaxed select-all">
@@ -449,7 +449,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 </div>
 
                 <p className="text-[11px] text-slate-400">
-                  কন্টেইনারকে ২৪/৭ জাগিয়ে রাখতে ক্লাউড রান সার্ভিসে <code>min-instances=1</code> ও <code>no-cpu-throttling</code> অন করতে এই কমান্ড ব্যবহার করুন:
+                  To keep the Cloud Run container warm 24/7 with zero cold starts, run this command to set <code>min-instances=1</code> and disable CPU throttling:
                 </p>
 
                 <pre className="p-3 rounded-xl bg-black/60 border border-white/10 text-[11px] font-mono text-slate-300 overflow-x-auto whitespace-pre leading-relaxed select-all">
@@ -460,16 +460,16 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Option B: Free Web Cron (No Terminal Needed) */}
               <div className="p-4 rounded-2xl bg-gradient-to-br from-white/[0.04] to-transparent border border-white/10 space-y-2">
                 <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider block">
-                  Option B: Free Web Cron (কোনো কমান্ড বা টার্মিনাল ছাড়া)
+                  Option B: Free Web Cron (Zero Terminal / CLI Required)
                 </span>
                 <p className="text-[11px] text-slate-300 leading-relaxed">
-                  আপনার কাছে GCP টার্মিনাল না থাকলে একদম বিনামূল্যে <strong>cron-job.org</strong> অথবা <strong>uptimerobot.com</strong>-এ গিয়ে একটি ফ্রি জব তৈরি করুন:
+                  If you do not use Google Cloud CLI, configure a free HTTP monitor on <strong>cron-job.org</strong> or <strong>uptimerobot.com</strong>:
                 </p>
                 <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-1.5 text-[11px] text-slate-300">
-                  <div>১. ক্রন জব URL: <code className="text-emerald-300 font-mono">{cronEndpointUrl}</code></div>
-                  <div>২. শিডিউল (Schedule): <strong>Every 1 minute (* * * * *)</strong></div>
-                  <div>৩. রিকোয়েস্ট মেথড: <strong>GET</strong></div>
-                  <div>৪. সেভ দিন—সার্ভার আর কখনো অফলাইন বা স্লিপ হবে না!</div>
+                  <div>1. Target URL: <code className="text-emerald-300 font-mono">{cronEndpointUrl}</code></div>
+                  <div>2. Schedule: <strong>Every 1 minute (* * * * *)</strong></div>
+                  <div>3. Method: <strong>GET</strong></div>
+                  <div>4. Save job — server will remain active 24/7 with zero downtime.</div>
                 </div>
               </div>
             </div>
@@ -526,11 +526,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               {/* Instructions */}
               <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 text-[11px] text-slate-300 space-y-1 leading-relaxed">
                 <span className="font-bold text-white block mb-1">
-                  টেলিগ্রাম চ্যানেলে সিগন্যাল সেটআপের সহজ নিয়ম:
+                  Quick Setup Guide for Telegram Channel & Group Broadcasting:
                 </span>
-                <p>১. টেলিগ্রামে গিয়ে <strong className="text-emerald-400">@johnwickvip_bot</strong> সার্চ করে <strong>Start</strong> চাপুন।</p>
-                <p>২. অথবা আপনার VIP চ্যানেল/গ্রুপে বটটিকে <strong>Admin</strong> হিসেবে অ্যাড করুন।</p>
-                <p>৩. বটটি অটোমেটিক সাবস্ক্রাইবার স্টোরে সেভ হয়ে যাবে এবং ২৪/৭ প্রতি রাউন্ডের সিগন্যাল পোস্ট করবে।</p>
+                <p>1. Open Telegram, search for <strong className="text-emerald-400">@johnwickvip_bot</strong> and tap <strong>Start</strong>.</p>
+                <p>2. Alternatively, add the bot as an <strong>Admin</strong> to your VIP channel or group.</p>
+                <p>3. Subscribers are automatically registered to receive 24/7 real-time signal dispatches.</p>
               </div>
 
               {/* Chat ID Input & Test Button */}
@@ -580,7 +580,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 {/* Broadcast Timeframe Selection */}
                 <div className="pt-2">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                    বটে যে মোডগুলোর সিগন্যাল পোস্ট হবে:
+                    Enabled Timeframes Broadcasted to Telegram:
                   </span>
                   <div className="grid grid-cols-4 gap-1.5">
                     {TIMEFRAMES.map((tf) => (
@@ -618,7 +618,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                         Public Viewer Mode Active
                       </h4>
                       <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                        সকল ডিভাইসে সিগন্যাল সার্ভার থেকে অটোমেটিক ও একক সেন্ট্রাল টাইমে সিঙ্ক হচ্ছে। অ্যাডমিন পাসকোড দিয়ে এন্ডপয়েন্ট এডিট আনলক করতে পারবেন।
+                        Signals are synchronized across all devices from the central server clock. Admin passcode unlocks endpoint configuration and database management.
                       </p>
                     </div>
                   </div>
